@@ -119,6 +119,22 @@ VITE_API_URL=https://your-backend-domain.com
 - Start command: `npm start`
 - Node version: current LTS is recommended
 
+### Render
+
+This repo now includes [render.yaml](/H:/House%20Aurelius/Mkulima/render.yaml) so Render can create:
+
+- `mkulima-api` from `backend/`
+- `mkulima-web` from `frontend/`
+
+If you create services manually in Render, use:
+
+- Backend root directory: `backend`
+- Backend build command: `npm install`
+- Backend start command: `npm start`
+- Frontend root directory: `frontend`
+- Frontend build command: `npm install && npm run build`
+- Frontend publish directory: `dist`
+
 ## Core API Areas
 
 - `/auth`
