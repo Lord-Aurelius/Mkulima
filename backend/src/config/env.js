@@ -11,7 +11,7 @@ function requireEnv(name, fallback) {
   return value;
 }
 
-const defaultAppOrigins = [
+const localAppOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:4173",
   "http://localhost:4173",
@@ -26,7 +26,13 @@ const configuredAppOrigins = (process.env.APP_ORIGIN || "")
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 4000),
-  appOrigins: [...new Set([...configuredAppOrigins, ...defaultAppOrigins])],
+  appOrigins: [
+    ...new Set(
+      envModeUsesLocalOrigins(process.env.NODE_ENV || "development")
+        ? [...configuredAppOrigins, ...localAppOrigins]
+        : configuredAppOrigins
+    )
+  ],
   publicAssetBaseUrl: process.env.PUBLIC_ASSET_BASE_URL || "http://127.0.0.1:4000",
   jwtSecret: requireEnv("JWT_SECRET", "change-this-secret"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "8h",
@@ -41,5 +47,9 @@ const env = {
     publicBaseUrl: requireEnv("S3_PUBLIC_BASE_URL")
   }
 };
+
+function envModeUsesLocalOrigins(nodeEnv) {
+  return !nodeEnv || nodeEnv === "development";
+}
 
 module.exports = env;
