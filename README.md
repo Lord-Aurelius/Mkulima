@@ -113,6 +113,18 @@ VITE_API_URL=https://your-backend-domain.com
 - Build command: `npm run build`
 - Output directory: `dist`
 
+### Vercel
+
+This repo includes [vercel.json](/H:/House%20Aurelius/Mkulima/vercel.json) so Vercel can build the frontend from the repo root without using `react-scripts`.
+
+If you configure the project manually in Vercel:
+
+- Production branch: `main`
+- Build command: `cd frontend && npm run build`
+- Install command: `cd frontend && npm install`
+- Output directory: `frontend/dist`
+- Environment variable: `VITE_API_URL=https://your-backend-domain.com`
+
 ### Backend
 
 - Root directory: `backend`
