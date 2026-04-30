@@ -51,6 +51,11 @@ const env = {
   jwtSecret: requireEnv("JWT_SECRET", "change-this-secret"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "8h",
   databaseUrl: requireEnv("DATABASE_URL"),
+  dbPoolMax: Number(process.env.DB_POOL_MAX || 10),
+  dbQueryTimeoutMs: Number(process.env.DB_QUERY_TIMEOUT_MS || 15000),
+  logRequests: process.env.LOG_REQUESTS
+    ? process.env.LOG_REQUESTS === "true"
+    : envModeUsesLocalOrigins(process.env.NODE_ENV || "development"),
   maxImageSizeMb: Number(process.env.MAX_IMAGE_SIZE_MB || 4),
   s3: {
     region: requireEnv("S3_REGION", "us-east-1"),

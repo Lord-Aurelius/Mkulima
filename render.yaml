@@ -21,6 +21,12 @@ services:
         value: 8h
       - key: DATABASE_URL
         sync: false
+      - key: DB_POOL_MAX
+        value: 10
+      - key: DB_QUERY_TIMEOUT_MS
+        value: 15000
+      - key: LOG_REQUESTS
+        value: false
       - key: S3_REGION
         value: us-east-1
       - key: S3_BUCKET
@@ -34,7 +40,7 @@ services:
       - key: S3_PUBLIC_BASE_URL
         sync: false
       - key: MAX_IMAGE_SIZE_MB
-        value: 4
+        value: 12
 
   - type: static_site
     name: mkulima-web

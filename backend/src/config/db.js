@@ -7,6 +7,11 @@ const shouldUseSsl = /sslmode=require/i.test(env.databaseUrl) || /neon\.tech/i.t
 
 const pool = new Pool({
   connectionString: env.databaseUrl,
+  max: env.dbPoolMax,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 8000,
+  query_timeout: env.dbQueryTimeoutMs,
+  statement_timeout: env.dbQueryTimeoutMs,
   ssl: shouldUseSsl
     ? {
         rejectUnauthorized: false

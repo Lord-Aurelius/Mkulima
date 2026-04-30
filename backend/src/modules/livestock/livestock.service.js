@@ -7,7 +7,7 @@ function resolveFarm(auth, farmId) {
   return auth.role === "creator" ? farmId : auth.farmId;
 }
 
-async function decorateLivestock(record) {
+async function decorateLivestock(record, { includeQrCode = true } = {}) {
   const qrPayload = JSON.stringify({
     targetType: "livestock",
     qrToken: record.qr_token,
@@ -20,7 +20,7 @@ async function decorateLivestock(record) {
     ...record,
     qrPayload,
     qrUrl: createQrDestinationUrl(qrPayload),
-    qrCodeDataUrl: await createQrCodeDataUrl(qrPayload)
+    qrCodeDataUrl: includeQrCode ? await createQrCodeDataUrl(qrPayload) : null
   };
 }
 
@@ -35,7 +35,7 @@ async function listLivestock(auth, farmId) {
     `,
     [scopedFarmId]
   );
-  return Promise.all(result.rows.map(decorateLivestock));
+  return Promise.all(result.rows.map((record) => decorateLivestock(record, { includeQrCode: auth.role !== "worker" })));
 }
 
 async function createLivestock(auth, payload) {

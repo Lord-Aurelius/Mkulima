@@ -1,12 +1,18 @@
 const express = require("express");
 const { requireAuth, requireRoles } = require("../../middleware/auth");
+const { createRateLimiter } = require("../../middleware/rate-limit");
 const controller = require("./auth.controller");
 
 const router = express.Router();
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyPrefix: "auth"
+});
 
-router.post("/bootstrap", controller.bootstrap);
-router.post("/login", controller.login);
-router.post("/signup-request", controller.signupRequest);
+router.post("/bootstrap", authLimiter, controller.bootstrap);
+router.post("/login", authLimiter, controller.login);
+router.post("/signup-request", authLimiter, controller.signupRequest);
 router.get("/me", requireAuth, controller.me);
 router.post("/change-password", requireAuth, requireRoles("creator", "admin"), controller.changePassword);
 router.get("/signup-requests", requireAuth, requireRoles("creator"), controller.listSignupRequests);

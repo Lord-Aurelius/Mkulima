@@ -1,6 +1,9 @@
 const QRCode = require("qrcode");
 const env = require("../config/env");
 
+const qrCache = new Map();
+const maxCacheEntries = 500;
+
 function normalizePayload(payload) {
   return typeof payload === "string" ? payload : JSON.stringify(payload);
 }
@@ -13,11 +16,23 @@ function createQrDestinationUrl(payload) {
 }
 
 async function createQrCodeDataUrl(payload) {
-  return QRCode.toDataURL(createQrDestinationUrl(payload), {
+  const destinationUrl = createQrDestinationUrl(payload);
+  const cached = qrCache.get(destinationUrl);
+  if (cached) {
+    return cached;
+  }
+
+  const dataUrl = await QRCode.toDataURL(destinationUrl, {
     errorCorrectionLevel: "M",
     margin: 1,
     width: 220
   });
+
+  if (qrCache.size >= maxCacheEntries) {
+    qrCache.delete(qrCache.keys().next().value);
+  }
+  qrCache.set(destinationUrl, dataUrl);
+  return dataUrl;
 }
 
 module.exports = {

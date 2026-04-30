@@ -4,6 +4,7 @@ const env = require("./config/env");
 const logger = require("./lib/logger");
 const errorHandler = require("./middleware/error-handler");
 const notFound = require("./middleware/not-found");
+const securityHeaders = require("./middleware/security-headers");
 const authRoutes = require("./modules/auth/auth.routes");
 const farmRoutes = require("./modules/farms/farm.routes");
 const workerRoutes = require("./modules/workers/worker.routes");
@@ -18,13 +19,21 @@ const financeRoutes = require("./modules/finance/finance.routes");
 
 const app = express();
 
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(securityHeaders);
+
 app.use((req, res, next) => {
   const requestOrigin = req.headers.origin;
-  const allowedOrigin = requestOrigin && env.appOrigins.includes(requestOrigin)
-    ? requestOrigin
-    : env.appOrigins[0];
+  const isAllowedOrigin = requestOrigin && env.appOrigins.includes(requestOrigin);
 
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  if (requestOrigin && !isAllowedOrigin) {
+    return res.status(403).json({ error: { message: "Origin not allowed." } });
+  }
+
+  if (isAllowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+  }
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader("Vary", "Origin");
@@ -35,10 +44,15 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: "1mb" }));
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads"), {
+  immutable: true,
+  maxAge: "7d"
+}));
 
 app.use((req, _res, next) => {
-  logger.info("request", { method: req.method, path: req.originalUrl });
+  if (env.logRequests && req.path !== "/health") {
+    logger.info("request", { method: req.method, path: req.originalUrl });
+  }
   next();
 });
 

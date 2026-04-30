@@ -81,6 +81,9 @@ PUBLIC_APP_URL=https://your-frontend-domain.com
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=8h
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+DB_POOL_MAX=10
+DB_QUERY_TIMEOUT_MS=15000
+LOG_REQUESTS=false
 S3_REGION=us-east-1
 S3_BUCKET=mkulima-assets
 S3_ENDPOINT=https://your-s3-endpoint.com

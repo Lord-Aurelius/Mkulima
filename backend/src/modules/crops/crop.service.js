@@ -7,7 +7,7 @@ function resolveFarm(auth, farmId) {
   return auth.role === "creator" ? farmId : auth.farmId;
 }
 
-async function decorateCrop(crop) {
+async function decorateCrop(crop, { includeQrCode = true } = {}) {
   const qrPayload = JSON.stringify({
     targetType: "crop",
     qrToken: crop.qr_token,
@@ -20,7 +20,7 @@ async function decorateCrop(crop) {
     ...crop,
     qrPayload,
     qrUrl: createQrDestinationUrl(qrPayload),
-    qrCodeDataUrl: await createQrCodeDataUrl(qrPayload)
+    qrCodeDataUrl: includeQrCode ? await createQrCodeDataUrl(qrPayload) : null
   };
 }
 
@@ -37,7 +37,7 @@ async function listCrops(auth, farmId) {
     [scopedFarmId]
   );
 
-  return Promise.all(result.rows.map(decorateCrop));
+  return Promise.all(result.rows.map((crop) => decorateCrop(crop, { includeQrCode: auth.role !== "worker" })));
 }
 
 async function createCrop(auth, payload) {
