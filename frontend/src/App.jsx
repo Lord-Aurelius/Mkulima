@@ -40,6 +40,7 @@ function getViews(user) {
   }
 
   return [
+    "daily-log",
     "duties",
     "schedule",
     "learn",
@@ -67,6 +68,7 @@ function App() {
   const [assignments, setAssignments] = useState([]);
   const [crops, setCrops] = useState([]);
   const [livestock, setLivestock] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [educationPosts, setEducationPosts] = useState([]);
   const [marketplaceAds, setMarketplaceAds] = useState([]);
   const [authMode, setAuthMode] = useState("login");
@@ -81,6 +83,7 @@ function App() {
   const [cropForm, setCropForm] = useState({ type: "", plantingDate: "", harvestDate: "", quantity: "", expectedYield: "", image: null });
   const [livestockForm, setLivestockForm] = useState({ type: "", count: "", productionMetric: "", latestMetricValue: "", image: null });
   const [productionForm, setProductionForm] = useState({ livestockId: "", metricValue: "", notes: "" });
+  const [logForm, setLogForm] = useState({ targetPayload: "", task: "", images: [] });
   const [educationForm, setEducationForm] = useState({ title: "", body: "", image: null });
   const [marketplaceForm, setMarketplaceForm] = useState({ title: "", contactPerson: "", location: "", price: "", phoneNumber: "", image: null });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
@@ -187,6 +190,11 @@ function App() {
       setAssignments(data.assignments);
     }
 
+    if (targetView === "daily-log") {
+      const data = await api.logs.list(session.token);
+      setLogs(data.logs);
+    }
+
     if (targetView === "crops" || targetView === "schedule") {
       const data = await api.crops.list(session.token);
       setCrops(data.crops);
@@ -224,6 +232,7 @@ function App() {
     setAssignments([]);
     setCrops([]);
     setLivestock([]);
+    setLogs([]);
     setEducationPosts([]);
     setMarketplaceAds([]);
     setMobileMenuOpen(false);
@@ -452,7 +461,32 @@ function App() {
     });
   }
 
+  async function handleLogCreate(event) {
+    event.preventDefault();
+    await runTask(async () => {
+      const parsedTargetPayload = parseQrPayloadInput(logForm.targetPayload);
+      if (logForm.targetPayload.trim() && !parsedTargetPayload) {
+        throw new Error("The scanned QR payload is not valid. Paste the full QR content from a crop or livestock code.");
+      }
+
+      const formData = new FormData();
+      formData.set("task", logForm.task);
+      if (parsedTargetPayload) {
+        formData.set("targetPayload", JSON.stringify(parsedTargetPayload));
+      }
+      Array.from(logForm.images || []).slice(0, 4).forEach((file) => {
+        formData.append("images", file);
+      });
+
+      await api.logs.create(session.token, formData);
+      setLogForm({ targetPayload: "", task: "", images: [] });
+      await refreshView("daily-log");
+      setNotice("Daily log submitted.");
+    });
+  }
+
   const editingWorker = workers.find((worker) => worker.id === editingWorkerId);
+  const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
 
   if (!session?.token || !user) {
     return (
@@ -832,6 +866,72 @@ function App() {
           </section>
         )}
 
+        {view === "daily-log" && (
+          <section className="page-grid two-column">
+            <Panel title="Submit daily log">
+              <form className="stack" onSubmit={handleLogCreate}>
+                <TextArea
+                  label="Scanned QR payload"
+                  required={false}
+                  value={logForm.targetPayload}
+                  onChange={(value) => setLogForm({ ...logForm, targetPayload: value })}
+                />
+                {logForm.targetPayload.trim() && (
+                  <div className="qr-summary">
+                    {parsedQrPayload ? (
+                      <>
+                        <strong>{parsedQrPayload.targetType === "livestock" ? "Livestock target" : "Crop target"}</strong>
+                        <span>{parsedQrPayload.label || parsedQrPayload.targetId || "QR target ready"}</span>
+                      </>
+                    ) : (
+                      <span className="error">Paste the full QR content after scanning.</span>
+                    )}
+                  </div>
+                )}
+                <TextArea
+                  label="Work done"
+                  value={logForm.task}
+                  onChange={(value) => setLogForm({ ...logForm, task: value })}
+                />
+                <label className="field">
+                  <span>Images (up to 4)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => setLogForm({ ...logForm, images: Array.from(event.target.files || []).slice(0, 4) })}
+                  />
+                </label>
+                <button disabled={busy} type="submit">Submit daily log</button>
+              </form>
+            </Panel>
+            <Panel title="Recent logs">
+              {logs.length ? (
+                <div className="list">
+                  {logs.map((log) => (
+                    <article className="log-card" key={log.id}>
+                      <div className="log-head">
+                        <strong>{log.target_label || "General work log"}</strong>
+                        <span>{formatDateTime(log.created_at)}</span>
+                      </div>
+                      <p>{log.task}</p>
+                      {log.images?.length ? (
+                        <div className="image-strip">
+                          {log.images.map((image) => (
+                            <img key={image.id || image.url} alt="Daily log attachment" src={image.url || image} />
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No daily logs submitted yet.</p>
+              )}
+            </Panel>
+          </section>
+        )}
+
         {view === "duties" && (
           <Panel title="My duties">
             <List emptyLabel="No duties assigned." items={assignments.map((assignment) => ({ title: assignment.title, body: assignment.description, meta: assignment.status }))} />
@@ -977,6 +1077,7 @@ function labelForView(view) {
     packages: "Packages",
     payroll: "Payroll",
     "duties-admin": "Worker Duties",
+    "daily-log": "Daily Log",
     crops: "Crops",
     livestock: "Livestock",
     education: "Education",
@@ -998,6 +1099,22 @@ function formatDate(value) {
 function formatDateTime(value) {
   if (!value) return "Not set";
   return new Date(value).toLocaleString();
+}
+
+function parseQrPayloadInput(value) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed?.targetType || !parsed?.qrToken) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export default App;
