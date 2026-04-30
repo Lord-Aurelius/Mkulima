@@ -1,24 +1,10 @@
-const LOCAL_API_URL = "http://localhost:4000";
-const PRODUCTION_API_URL = "https://mkulima-1-cxdy.onrender.com";
-
-function resolveApiUrl() {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return LOCAL_API_URL;
-    }
-  }
-
-  return PRODUCTION_API_URL;
-}
-
-const API_URL = resolveApiUrl();
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 async function request(path, { token, method = "GET", body, formData } = {}) {
+  if (!API_URL) {
+    throw new Error("Missing VITE_API_URL for this deployment. Set the frontend API URL before deploying.");
+  }
+
   const headers = {};
 
   if (token) {
@@ -41,7 +27,7 @@ async function request(path, { token, method = "GET", body, formData } = {}) {
       body: payload
     });
   } catch {
-    throw new Error(`Network error reaching ${API_URL}. Check frontend API URL and backend CORS settings.`);
+    throw new Error(`Network error reaching ${API_URL}. Check frontend API URL, backend URL, and backend CORS settings.`);
   }
 
   const data = await response.json().catch(() => ({}));

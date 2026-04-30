@@ -33,7 +33,11 @@ const env = {
         : configuredAppOrigins
     )
   ],
-  publicAssetBaseUrl: process.env.PUBLIC_ASSET_BASE_URL || "http://127.0.0.1:4000",
+  publicAssetBaseUrl: process.env.PUBLIC_ASSET_BASE_URL || (
+    envModeUsesLocalOrigins(process.env.NODE_ENV || "development")
+      ? "http://127.0.0.1:4000"
+      : ""
+  ),
   jwtSecret: requireEnv("JWT_SECRET", "change-this-secret"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "8h",
   databaseUrl: requireEnv("DATABASE_URL"),
