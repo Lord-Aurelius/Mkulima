@@ -261,6 +261,24 @@ textarea {
   margin: 0;
 }
 
+.farm-logo,
+.farm-list-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 16px;
+  display: block;
+  margin: 0 0 0.8rem;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--line);
+}
+
+.farm-list-logo {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0.7rem;
+}
+
 .nav-list {
   display: grid;
   gap: 0.35rem;
@@ -455,6 +473,12 @@ textarea {
   flex-wrap: wrap;
 }
 
+.form-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
 .payroll-list,
 .qr-grid {
   display: grid;
@@ -533,6 +557,12 @@ textarea {
 
 .qr-summary span {
   color: var(--muted);
+}
+
+.activity-strip {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .qr-card img {
@@ -622,7 +652,8 @@ textarea {
 
   .page-grid.two-column,
   .stats-grid,
-  .overview-grid {
+  .overview-grid,
+  .form-split {
     grid-template-columns: 1fr;
   }
 }

@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS farms (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE farms ADD COLUMN IF NOT EXISTS logo_url TEXT;
+ALTER TABLE farms ADD COLUMN IF NOT EXISTS logo_storage_key TEXT;
+
 CREATE TABLE IF NOT EXISTS packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(160) NOT NULL UNIQUE,
@@ -93,6 +96,26 @@ CREATE TABLE IF NOT EXISTS daily_log_images (
 );
 
 CREATE INDEX IF NOT EXISTS daily_log_images_log_idx ON daily_log_images (log_id);
+
+CREATE TABLE IF NOT EXISTS farm_activity_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  log_id UUID REFERENCES daily_logs(id) ON DELETE SET NULL,
+  farm_id UUID NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
+  worker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type VARCHAR(40) NOT NULL,
+  target_id UUID,
+  target_label VARCHAR(200),
+  record_type VARCHAR(40) NOT NULL,
+  material_type VARCHAR(80) NOT NULL,
+  quantity NUMERIC(12, 2) NOT NULL CHECK (quantity >= 0),
+  unit VARCHAR(40) NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS farm_activity_records_farm_idx ON farm_activity_records (farm_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS farm_activity_records_worker_idx ON farm_activity_records (worker_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS farm_activity_records_target_idx ON farm_activity_records (target_type, target_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS crops (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -186,6 +209,20 @@ CREATE TABLE IF NOT EXISTS marketplace_ads (
 );
 
 CREATE INDEX IF NOT EXISTS marketplace_ads_farm_idx ON marketplace_ads (farm_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS finance_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  farm_id UUID NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
+  entry_type VARCHAR(20) NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
+  entry_date DATE NOT NULL,
+  notes TEXT,
+  created_by UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS finance_entries_farm_idx ON finance_entries (farm_id, entry_date DESC, created_at DESC);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

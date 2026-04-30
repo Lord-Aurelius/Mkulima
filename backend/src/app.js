@@ -14,6 +14,7 @@ const educationRoutes = require("./modules/education/education.routes");
 const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
 const packageRoutes = require("./modules/packages/package.routes");
 const marketplaceRoutes = require("./modules/marketplace/marketplace.routes");
+const financeRoutes = require("./modules/finance/finance.routes");
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use("/education", educationRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/packages", packageRoutes);
 app.use("/marketplace", marketplaceRoutes);
+app.use("/finance", financeRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

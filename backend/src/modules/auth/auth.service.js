@@ -168,7 +168,7 @@ async function rejectSignupRequest(requestId) {
 async function login({ email, password }) {
   const result = await query(
     `
-      SELECT u.id, u.role, u.name, u.email, u.password_hash, u.farm_id, f.name AS farm_name
+      SELECT u.id, u.role, u.name, u.email, u.password_hash, u.farm_id, f.name AS farm_name, f.logo_url AS farm_logo_url
       FROM users u
       LEFT JOIN farms f ON f.id = u.farm_id
       WHERE u.email = $1 AND u.is_active = TRUE
@@ -197,6 +197,7 @@ async function login({ email, password }) {
       email: user.email,
       farmId: user.farm_id,
       farmName: user.farm_name,
+      farmLogoUrl: user.farm_logo_url,
       packageName: farmPackage?.name || null,
       hasMarketplace: Boolean(farmPackage?.has_marketplace)
     }
@@ -206,7 +207,7 @@ async function login({ email, password }) {
 async function loginWithQr({ qrToken }) {
   const result = await query(
     `
-      SELECT u.id, u.role, u.name, u.email, u.farm_id, f.name AS farm_name
+      SELECT u.id, u.role, u.name, u.email, u.farm_id, f.name AS farm_name, f.logo_url AS farm_logo_url
       FROM users u
       LEFT JOIN farms f ON f.id = u.farm_id
       WHERE u.qr_token = $1 AND u.role = 'worker' AND u.is_active = TRUE
@@ -230,6 +231,7 @@ async function loginWithQr({ qrToken }) {
       email: user.email,
       farmId: user.farm_id,
       farmName: user.farm_name,
+      farmLogoUrl: user.farm_logo_url,
       packageName: farmPackage?.name || null,
       hasMarketplace: Boolean(farmPackage?.has_marketplace)
     }
@@ -239,7 +241,7 @@ async function loginWithQr({ qrToken }) {
 async function getCurrentUser(userId) {
   const result = await query(
     `
-      SELECT u.id, u.role, u.name, u.email, u.farm_id, u.duty, f.name AS farm_name
+      SELECT u.id, u.role, u.name, u.email, u.farm_id, u.duty, f.name AS farm_name, f.logo_url AS farm_logo_url
       FROM users u
       LEFT JOIN farms f ON f.id = u.farm_id
       WHERE u.id = $1 AND u.is_active = TRUE
@@ -256,6 +258,7 @@ async function getCurrentUser(userId) {
   const farmPackage = user.farm_id ? await getPackageForFarm(user.farm_id) : null;
   return {
     ...user,
+    farm_logo_url: user.farm_logo_url,
     package_name: farmPackage?.name || null,
     has_marketplace: Boolean(farmPackage?.has_marketplace)
   };

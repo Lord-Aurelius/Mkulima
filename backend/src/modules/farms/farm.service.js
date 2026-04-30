@@ -1,13 +1,14 @@
 const { query, withTransaction } = require("../../config/db");
 const AppError = require("../../lib/app-error");
 const { getDefaultPackage } = require("../../services/package.service");
+const { uploadImage } = require("../../services/storage.service");
 const { createAdminForFarm } = require("../auth/auth.service");
 
 async function listFarms(auth) {
   if (auth.role === "creator") {
     const result = await query(
       `
-        SELECT f.id, f.name, f.location, f.land_size, f.created_at,
+        SELECT f.id, f.name, f.location, f.land_size, f.logo_url, f.created_at,
                a.id AS admin_id, a.name AS admin_name, a.email AS admin_email,
                COALESCE(p.id, fp.id) AS package_id,
                COALESCE(p.name, fp.name) AS package_name,
@@ -24,7 +25,7 @@ async function listFarms(auth) {
 
   const result = await query(
     `
-      SELECT f.id, f.name, f.location, f.land_size, f.created_at,
+      SELECT f.id, f.name, f.location, f.land_size, f.logo_url, f.created_at,
              a.id AS admin_id, a.name AS admin_name, a.email AS admin_email
       FROM farms f
       LEFT JOIN users a ON a.farm_id = f.id AND a.role = 'admin'
@@ -46,7 +47,7 @@ async function getFarmById(id, auth) {
 
   const result = await query(
     `
-      SELECT f.id, f.name, f.location, f.land_size, f.created_at, f.updated_at,
+      SELECT f.id, f.name, f.location, f.land_size, f.logo_url, f.created_at, f.updated_at,
              a.id AS admin_id, a.name AS admin_name, a.email AS admin_email
       FROM farms f
       LEFT JOIN users a ON a.farm_id = f.id AND a.role = 'admin'
@@ -63,16 +64,20 @@ async function getFarmById(id, auth) {
   return result.rows[0];
 }
 
-async function createFarm({ name, location, landSize, admin }) {
+async function createFarm({ name, location, landSize, admin, file }) {
   return withTransaction(async (client) => {
     const freePackage = await getDefaultPackage();
+    let logo = null;
+    if (file) {
+      logo = await uploadImage({ file, folder: "farms/logos" });
+    }
     const farmResult = await client.query(
       `
-        INSERT INTO farms (name, location, land_size, package_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO farms (name, location, land_size, package_id, logo_url, logo_storage_key)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
       `,
-      [name, location, landSize, freePackage?.id || null]
+      [name, location, landSize, freePackage?.id || null, logo ? logo.url : null, logo ? logo.key : null]
     );
 
     const farm = farmResult.rows[0];
@@ -97,15 +102,23 @@ async function createFarm({ name, location, landSize, admin }) {
   });
 }
 
-async function updateFarm(id, { name, location, landSize }) {
+async function updateFarm(id, { name, location, landSize, file }) {
+  let logo = null;
+  if (file) {
+    logo = await uploadImage({ file, folder: "farms/logos" });
+  }
   const result = await query(
     `
       UPDATE farms
-      SET name = $2, location = $3, land_size = $4
+      SET name = $2,
+          location = $3,
+          land_size = $4,
+          logo_url = COALESCE($5, logo_url),
+          logo_storage_key = COALESCE($6, logo_storage_key)
       WHERE id = $1
       RETURNING *
     `,
-    [id, name, location, landSize]
+    [id, name, location, landSize, logo ? logo.url : null, logo ? logo.key : null]
   );
 
   if (!result.rowCount) {
@@ -127,6 +140,8 @@ async function clearFarmRecords(id) {
   return withTransaction(async (client) => {
     await client.query("DELETE FROM marketplace_ads WHERE farm_id = $1", [id]);
     await client.query("DELETE FROM education_posts WHERE farm_id = $1", [id]);
+    await client.query("DELETE FROM finance_entries WHERE farm_id = $1", [id]);
+    await client.query("DELETE FROM farm_activity_records WHERE farm_id = $1", [id]);
     await client.query("DELETE FROM livestock_updates WHERE farm_id = $1", [id]);
     await client.query("DELETE FROM livestock WHERE farm_id = $1", [id]);
     await client.query("DELETE FROM crops WHERE farm_id = $1", [id]);

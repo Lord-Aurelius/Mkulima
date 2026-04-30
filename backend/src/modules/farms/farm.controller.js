@@ -14,7 +14,16 @@ const getFarm = asyncHandler(async (req, res) => {
 });
 
 const createFarm = asyncHandler(async (req, res) => {
-  const { name, location, landSize, admin } = req.body;
+  const { name, location, landSize } = req.body;
+  const admin = req.body.admin || (
+    req.body.adminName || req.body.adminEmail || req.body.adminPassword
+      ? {
+          name: req.body.adminName,
+          email: req.body.adminEmail,
+          password: req.body.adminPassword
+        }
+      : null
+  );
   const errors = collect(
     required(name, "Name"),
     required(location, "Location"),
@@ -41,6 +50,7 @@ const createFarm = asyncHandler(async (req, res) => {
     name: cleanString(name, 160),
     location: cleanString(location, 255),
     landSize: cleanNumber(landSize),
+    file: req.file || null,
     admin: admin
       ? {
           name: cleanString(admin.name, 160),
@@ -68,7 +78,8 @@ const updateFarm = asyncHandler(async (req, res) => {
   const farm = await service.updateFarm(req.params.id, {
     name: cleanString(name, 160),
     location: cleanString(location, 255),
-    landSize: cleanNumber(landSize)
+    landSize: cleanNumber(landSize),
+    file: req.file || null
   });
 
   res.json({ farm });

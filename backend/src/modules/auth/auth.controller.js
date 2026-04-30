@@ -88,6 +88,7 @@ const me = asyncHandler(async (req, res) => {
       duty: user.duty,
       farmId: user.farm_id,
       farmName: user.farm_name,
+      farmLogoUrl: user.farm_logo_url,
       packageName: user.package_name,
       hasMarketplace: user.has_marketplace
     }

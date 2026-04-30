@@ -6,6 +6,23 @@ const getSummary = asyncHandler(async (req, res) => {
   res.json({ summary });
 });
 
+const getMonthlyReport = asyncHandler(async (req, res) => {
+  const report = await service.getMonthlyReport(req.auth, {
+    farmId: req.query.farmId,
+    month: req.query.month
+  });
+  res.json({ report });
+});
+
+const getWorkerContribution = asyncHandler(async (req, res) => {
+  const contribution = await service.getWorkerContribution(req.auth, {
+    month: req.query.month
+  });
+  res.json({ contribution });
+});
+
 module.exports = {
-  getSummary
+  getMonthlyReport,
+  getSummary,
+  getWorkerContribution
 };

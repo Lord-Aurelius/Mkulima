@@ -1,5 +1,9 @@
 const API_URL = import.meta.env.VITE_API_URL || "";
 
+function isFormData(value) {
+  return typeof FormData !== "undefined" && value instanceof FormData;
+}
+
 async function request(path, { token, method = "GET", body, formData } = {}) {
   if (!API_URL) {
     throw new Error("Missing VITE_API_URL for this deployment. Set the frontend API URL before deploying.");
@@ -54,9 +58,15 @@ export const api = {
     changePassword: (token, body) => request("/auth/change-password", { token, method: "POST", body })
   },
   summary: (token, farmId) => request(`/dashboard/summary${farmId ? `?farmId=${farmId}` : ""}`, { token }),
+  dashboard: {
+    monthlyReport: (token, month, farmId) => request(`/dashboard/monthly-report?month=${encodeURIComponent(month)}${farmId ? `&farmId=${encodeURIComponent(farmId)}` : ""}`, { token }),
+    workerContribution: (token, month) => request(`/dashboard/worker-contribution?month=${encodeURIComponent(month)}`, { token })
+  },
   farms: {
     list: (token) => request("/farms", { token }),
-    create: (token, body) => request("/farms", { token, method: "POST", body }),
+    create: (token, payload) => isFormData(payload)
+      ? request("/farms", { token, method: "POST", formData: payload })
+      : request("/farms", { token, method: "POST", body: payload }),
     clearRecords: (token, id) => request(`/farms/${id}/records`, { token, method: "DELETE" }),
     delete: (token, id) => request(`/farms/${id}`, { token, method: "DELETE" })
   },
@@ -98,5 +108,9 @@ export const api = {
   marketplace: {
     list: (token) => request("/marketplace", { token }),
     create: (token, formData) => request("/marketplace", { token, method: "POST", formData })
+  },
+  finance: {
+    list: (token, month) => request(`/finance${month ? `?month=${encodeURIComponent(month)}` : ""}`, { token }),
+    create: (token, body) => request("/finance", { token, method: "POST", body })
   }
 };

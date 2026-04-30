@@ -2,7 +2,7 @@ const { query, withTransaction } = require("../../config/db");
 const AppError = require("../../lib/app-error");
 const { uploadImage } = require("../../services/storage.service");
 
-async function resolveWorker(auth, workerId, client) {
+async function resolveWorker(auth) {
   if (auth.role !== "worker") {
     throw new AppError(403, "Only workers can submit daily logs.");
   }
@@ -62,14 +62,14 @@ async function resolveTarget(auth, targetPayload, client) {
   throw new AppError(422, "Unsupported QR target type.");
 }
 
-async function createLog(auth, { task, files, workerId, targetPayload }) {
+async function createLog(auth, { task, files, targetPayload, activityRecord }) {
   const uploadedImages = [];
   for (const file of files) {
     uploadedImages.push(await uploadImage({ file, folder: `logs/${auth.farmId || "shared"}` }));
   }
 
   return withTransaction(async (client) => {
-    const worker = await resolveWorker(auth, workerId, client);
+    const worker = await resolveWorker(auth);
     const target = await resolveTarget(auth, targetPayload, client);
     const farmId = target.farmId || worker.farm_id;
 
@@ -95,8 +95,34 @@ async function createLog(auth, { task, files, workerId, targetPayload }) {
       );
     }
 
+    if (activityRecord && target.targetType !== "general") {
+      await client.query(
+        `
+          INSERT INTO farm_activity_records (
+            log_id, farm_id, worker_id, target_type, target_id, target_label,
+            record_type, material_type, quantity, unit, notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `,
+        [
+          log.id,
+          farmId,
+          worker.id,
+          target.targetType,
+          target.targetId,
+          target.targetLabel,
+          activityRecord.recordType,
+          activityRecord.materialType,
+          activityRecord.quantity,
+          activityRecord.unit,
+          activityRecord.notes || null
+        ]
+      );
+    }
+
     return {
       ...log,
+      activityRecord,
       images: uploadedImages.map((image) => image.url)
     };
   });
@@ -132,10 +158,24 @@ async function listLogs(auth, { farmId, workerId, limit = 25 }) {
                  JSON_BUILD_OBJECT('id', i.id, 'url', i.image_url, 'sortOrder', i.sort_order)
                ) FILTER (WHERE i.id IS NOT NULL),
                '[]'
-             ) AS images
+             ) AS images,
+             COALESCE(
+               JSON_AGG(
+                 DISTINCT JSONB_BUILD_OBJECT(
+                   'id', ar.id,
+                   'recordType', ar.record_type,
+                   'materialType', ar.material_type,
+                   'quantity', ar.quantity,
+                   'unit', ar.unit,
+                   'notes', ar.notes
+                 )
+               ) FILTER (WHERE ar.id IS NOT NULL),
+               '[]'
+             ) AS activity_records
       FROM daily_logs l
       INNER JOIN users u ON u.id = l.worker_id
       LEFT JOIN daily_log_images i ON i.log_id = l.id
+      LEFT JOIN farm_activity_records ar ON ar.log_id = l.id
       ${whereSql}
       GROUP BY l.id, u.name
       ORDER BY l.created_at DESC

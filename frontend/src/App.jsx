@@ -42,6 +42,9 @@ function getViews(user) {
   if (user.role === "admin") {
     return [
       "overview",
+      "logs-admin",
+      "monthly-report",
+      "finance",
       "payroll",
       "duties-admin",
       "crops",
@@ -54,6 +57,7 @@ function getViews(user) {
 
   return [
     "daily-log",
+    "contribution",
     "duties",
     "schedule",
     "learn",
@@ -75,6 +79,8 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [summary, setSummary] = useState(null);
+  const [monthlyReport, setMonthlyReport] = useState(null);
+  const [workerContribution, setWorkerContribution] = useState(null);
   const [farms, setFarms] = useState([]);
   const [signupRequests, setSignupRequests] = useState([]);
   const [packages, setPackages] = useState([]);
@@ -85,10 +91,12 @@ function App() {
   const [logs, setLogs] = useState([]);
   const [educationPosts, setEducationPosts] = useState([]);
   const [marketplaceAds, setMarketplaceAds] = useState([]);
+  const [financeEntries, setFinanceEntries] = useState([]);
+  const [financeSummary, setFinanceSummary] = useState({ income: 0, expense: 0, net: 0 });
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [signupForm, setSignupForm] = useState({ name: "", email: "", password: "", farmName: "", location: "", landSize: "" });
-  const [farmForm, setFarmForm] = useState({ name: "", location: "", landSize: "", adminName: "", adminEmail: "", adminPassword: "" });
+  const [farmForm, setFarmForm] = useState({ name: "", location: "", landSize: "", adminName: "", adminEmail: "", adminPassword: "", logo: null });
   const [packageForm, setPackageForm] = useState({ name: "", slug: "", priceMonthly: "", hasMarketplace: true, description: "" });
   const [payrollForm, setPayrollForm] = useState({ name: "", duty: "", email: "", password: "", employmentStartDate: "", payRate: "", paymentStatus: "pending" });
   const [editingWorkerId, setEditingWorkerId] = useState("");
@@ -97,10 +105,23 @@ function App() {
   const [cropForm, setCropForm] = useState({ type: "", plantingDate: "", harvestDate: "", quantity: "", expectedYield: "", image: null });
   const [livestockForm, setLivestockForm] = useState({ type: "", count: "", productionMetric: "", latestMetricValue: "", image: null });
   const [productionForm, setProductionForm] = useState({ livestockId: "", metricValue: "", notes: "" });
-  const [logForm, setLogForm] = useState({ targetPayload: "", task: "", images: [] });
+  const [logForm, setLogForm] = useState({
+    targetPayload: "",
+    task: "",
+    images: [],
+    recordType: "input",
+    materialType: "",
+    quantity: "",
+    unit: "",
+    recordNotes: ""
+  });
   const [educationForm, setEducationForm] = useState({ title: "", body: "", image: null });
   const [marketplaceForm, setMarketplaceForm] = useState({ title: "", contactPerson: "", location: "", price: "", phoneNumber: "", image: null });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
+  const [reportMonth, setReportMonth] = useState(() => currentMonthValue());
+  const [financeMonth, setFinanceMonth] = useState(() => currentMonthValue());
+  const [contributionMonth, setContributionMonth] = useState(() => currentMonthValue());
+  const [financeForm, setFinanceForm] = useState({ entryType: "expense", category: "", amount: "", entryDate: todayValue(), notes: "" });
 
   const heroImages = [
     "https://images.pexels.com/photos/2252584/pexels-photo-2252584.jpeg?auto=compress&cs=tinysrgb&w=1200",
@@ -111,6 +132,7 @@ function App() {
   const activeQrPayload = parseQrPayloadInput(pendingQrTarget);
   const qrAccessMode = Boolean(activeQrPayload);
   const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
+  const logMaterialOptions = getLogMaterialOptions(parsedQrPayload?.targetType, logForm.recordType);
 
   useEffect(() => {
     const qrFromLocation = readQrTargetFromLocation();
@@ -170,6 +192,24 @@ function App() {
     refreshView(view).catch((err) => setError(err.message));
   }, [session?.token, user, view]);
 
+  useEffect(() => {
+    if (!session?.token || !user) {
+      return;
+    }
+
+    if (view === "monthly-report") {
+      refreshView("monthly-report").catch((err) => setError(err.message));
+    }
+
+    if (view === "finance") {
+      refreshView("finance").catch((err) => setError(err.message));
+    }
+
+    if (view === "contribution") {
+      refreshView("contribution").catch((err) => setError(err.message));
+    }
+  }, [reportMonth, financeMonth, contributionMonth]);
+
   async function runTask(task) {
     setBusy(true);
     setError("");
@@ -204,6 +244,22 @@ function App() {
       if (packageResponse?.packages) {
         setPackages(packageResponse.packages);
       }
+    }
+
+    if (targetView === "logs-admin") {
+      const data = await api.logs.list(session.token);
+      setLogs(data.logs);
+    }
+
+    if (targetView === "monthly-report") {
+      const data = await api.dashboard.monthlyReport(session.token, reportMonth);
+      setMonthlyReport(data.report);
+    }
+
+    if (targetView === "finance") {
+      const data = await api.finance.list(session.token, financeMonth);
+      setFinanceEntries(data.entries);
+      setFinanceSummary(data.summary);
     }
 
     if (targetView === "farms") {
@@ -248,6 +304,11 @@ function App() {
       setLogs(data.logs);
     }
 
+    if (targetView === "contribution") {
+      const data = await api.dashboard.workerContribution(session.token, contributionMonth);
+      setWorkerContribution(data.contribution);
+    }
+
     if (targetView === "crops" || targetView === "schedule") {
       const data = await api.crops.list(session.token);
       setCrops(data.crops);
@@ -278,6 +339,8 @@ function App() {
     setSession(null);
     setUser(null);
     setSummary(null);
+    setMonthlyReport(null);
+    setWorkerContribution(null);
     setFarms([]);
     setSignupRequests([]);
     setPackages([]);
@@ -288,6 +351,8 @@ function App() {
     setLogs([]);
     setEducationPosts([]);
     setMarketplaceAds([]);
+    setFinanceEntries([]);
+    setFinanceSummary({ income: 0, expense: 0, net: 0 });
     setMobileMenuOpen(false);
     window.localStorage.removeItem(sessionKey);
     if (!preserveQr) {
@@ -338,15 +403,21 @@ function App() {
   async function handleFarmCreate(event) {
     event.preventDefault();
     await runTask(async () => {
-      await api.farms.create(session.token, {
-        name: farmForm.name,
-        location: farmForm.location,
-        landSize: farmForm.landSize,
-        admin: farmForm.adminName && farmForm.adminEmail && farmForm.adminPassword
-          ? { name: farmForm.adminName, email: farmForm.adminEmail, password: farmForm.adminPassword }
-          : null
-      });
-      setFarmForm({ name: "", location: "", landSize: "", adminName: "", adminEmail: "", adminPassword: "" });
+      const formData = new FormData();
+      formData.set("name", farmForm.name);
+      formData.set("location", farmForm.location);
+      formData.set("landSize", farmForm.landSize);
+      if (farmForm.adminName && farmForm.adminEmail && farmForm.adminPassword) {
+        formData.set("adminName", farmForm.adminName);
+        formData.set("adminEmail", farmForm.adminEmail);
+        formData.set("adminPassword", farmForm.adminPassword);
+      }
+      if (farmForm.logo) {
+        formData.set("logo", farmForm.logo);
+      }
+
+      await api.farms.create(session.token, formData);
+      setFarmForm({ name: "", location: "", landSize: "", adminName: "", adminEmail: "", adminPassword: "", logo: null });
       await refreshView("farms");
       setNotice("Farm created.");
     });
@@ -540,6 +611,16 @@ function App() {
     });
   }
 
+  async function handleFinanceCreate(event) {
+    event.preventDefault();
+    await runTask(async () => {
+      await api.finance.create(session.token, financeForm);
+      setFinanceForm({ entryType: "expense", category: "", amount: "", entryDate: todayValue(), notes: "" });
+      await refreshView("finance");
+      setNotice("Finance entry saved.");
+    });
+  }
+
   async function handleProductionSubmit(event) {
     event.preventDefault();
     await runTask(async () => {
@@ -561,13 +642,29 @@ function App() {
       formData.set("task", logForm.task);
       if (parsedTargetPayload) {
         formData.set("targetPayload", JSON.stringify(parsedTargetPayload));
+        if (logForm.materialType && logForm.quantity && logForm.unit) {
+          formData.set("recordType", logForm.recordType);
+          formData.set("materialType", logForm.materialType);
+          formData.set("quantity", logForm.quantity);
+          formData.set("unit", logForm.unit);
+          formData.set("recordNotes", logForm.recordNotes);
+        }
       }
       Array.from(logForm.images || []).slice(0, 4).forEach((file) => {
         formData.append("images", file);
       });
 
       await api.logs.create(session.token, formData);
-      setLogForm({ targetPayload: "", task: "", images: [] });
+      setLogForm({
+        targetPayload: "",
+        task: "",
+        images: [],
+        recordType: "input",
+        materialType: "",
+        quantity: "",
+        unit: "",
+        recordNotes: ""
+      });
       await refreshView("daily-log");
       setNotice("Daily log submitted.");
     });
@@ -693,6 +790,7 @@ function App() {
       <aside className={mobileMenuOpen ? "sidebar mobile-open" : "sidebar"}>
         <div className="brand-block">
           <p className="eyebrow">Mkulima</p>
+          {user.farmLogoUrl ? <img alt={`${user.farmName || "Farm"} logo`} className="farm-logo" src={user.farmLogoUrl} /> : null}
           <h2>{user.farmName || "Creator workspace"}</h2>
           <p className="muted">{user.name} | {user.role}</p>
           {user.packageName && <p className="muted">Package: {user.packageName}</p>}
@@ -786,6 +884,142 @@ function App() {
           </section>
         )}
 
+        {view === "logs-admin" && (
+          <Panel title="Worker daily logs">
+            {logs.length ? (
+              <div className="list">
+                {logs.map((log) => (
+                  <article className="log-card" key={log.id}>
+                    <div className="log-head">
+                      <strong>{log.worker_name} | {log.target_label || "General work"}</strong>
+                      <span>{formatDateTime(log.created_at)}</span>
+                    </div>
+                    <p>{log.task}</p>
+                    {log.activity_records?.length ? (
+                      <div className="activity-strip">
+                        {log.activity_records.map((record) => (
+                          <span className="status-chip" key={record.id || `${record.materialType}-${record.unit}`}>
+                            {record.materialType}: {record.quantity} {record.unit}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {log.images?.length ? (
+                      <div className="image-strip">
+                        {log.images.map((image) => (
+                          <img key={image.id || image.url} alt="Worker upload" src={image.url || image} />
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">No worker logs yet.</p>
+            )}
+          </Panel>
+        )}
+
+        {view === "monthly-report" && (
+          <section className="page-grid two-column">
+            <Panel title="Monthly report">
+              <div className="stack">
+                <label className="field">
+                  <span>Month</span>
+                  <input type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} />
+                </label>
+                <div className="stats-grid report-stats">
+                  <StatCard label="Logs" value={monthlyReport?.overview?.logCount ?? 0} />
+                  <StatCard label="Active workers" value={monthlyReport?.overview?.activeWorkers ?? 0} />
+                  <StatCard label="Income" value={monthlyReport?.overview?.income ?? 0} />
+                  <StatCard label="Net" value={monthlyReport?.overview?.net ?? 0} />
+                </div>
+              </div>
+            </Panel>
+            <Panel title="Harvested produce">
+              <List
+                emptyLabel="No harvest records this month."
+                items={(monthlyReport?.harvests || []).map((item) => ({
+                  title: item.target_label || "Harvest",
+                  body: "Harvested produce",
+                  meta: `${item.total_quantity} ${item.unit}`
+                }))}
+              />
+            </Panel>
+            <Panel title="Farm inputs">
+              <List
+                emptyLabel="No input records this month."
+                items={(monthlyReport?.inputs || []).map((item) => ({
+                  title: item.material_type,
+                  body: "Recorded through QR check-ins",
+                  meta: `${item.total_quantity} ${item.unit}`
+                }))}
+              />
+            </Panel>
+            <Panel title="Livestock production">
+              <List
+                emptyLabel="No production updates this month."
+                items={(monthlyReport?.production || []).map((item) => ({
+                  title: item.livestock_type,
+                  body: "Production total",
+                  meta: `${item.total_metric}`
+                }))}
+              />
+            </Panel>
+            <Panel className="wide-panel" title="Recent monthly activity">
+              <List
+                emptyLabel="No activity captured this month."
+                items={(monthlyReport?.recentLogs || []).map((item) => ({
+                  title: `${item.worker_name} | ${item.target_label || "General work"}`,
+                  body: item.task,
+                  meta: formatDateTime(item.created_at)
+                }))}
+              />
+            </Panel>
+          </section>
+        )}
+
+        {view === "finance" && (
+          <section className="page-grid two-column">
+            <Panel title="Record income or expense">
+              <form className="stack" onSubmit={handleFinanceCreate}>
+                <SelectField label="Type" value={financeForm.entryType} onChange={(value) => setFinanceForm({ ...financeForm, entryType: value })} options={["expense", "income"]} />
+                <Input label="Category" value={financeForm.category} onChange={(value) => setFinanceForm({ ...financeForm, category: value })} />
+                <Input label="Amount" type="number" value={financeForm.amount} onChange={(value) => setFinanceForm({ ...financeForm, amount: value })} />
+                <Input label="Entry date" type="date" value={financeForm.entryDate} onChange={(value) => setFinanceForm({ ...financeForm, entryDate: value })} />
+                <TextArea label="Notes" required={false} value={financeForm.notes} onChange={(value) => setFinanceForm({ ...financeForm, notes: value })} />
+                <button disabled={busy} type="submit">Save entry</button>
+              </form>
+            </Panel>
+            <Panel title="Farm productivity">
+              <div className="stack">
+                <label className="field">
+                  <span>Month</span>
+                  <input type="month" value={financeMonth} onChange={(event) => setFinanceMonth(event.target.value)} />
+                </label>
+                <div className="stats-grid report-stats">
+                  <StatCard label="Income" value={financeSummary.income} />
+                  <StatCard label="Expense" value={financeSummary.expense} />
+                  <StatCard label="Net" value={financeSummary.net} />
+                </div>
+                <p className={financeSummary.net >= 0 ? "success-text" : "error"}>
+                  {financeSummary.net >= 0 ? "The farm is above cost for this period." : "The farm is currently spending more than it earns for this period."}
+                </p>
+              </div>
+            </Panel>
+            <Panel className="wide-panel" title="Finance entries">
+              <List
+                emptyLabel="No finance entries yet."
+                items={financeEntries.map((entry) => ({
+                  title: `${entry.entry_type} | ${entry.category}`,
+                  body: entry.notes || "No notes",
+                  meta: `${entry.amount} on ${formatDate(entry.entry_date)}`
+                }))}
+              />
+            </Panel>
+          </section>
+        )}
+
         {view === "farms" && (
           <section className="page-grid two-column">
             <Panel title="Create farm">
@@ -793,6 +1027,7 @@ function App() {
                 <Input label="Farm name" value={farmForm.name} onChange={(value) => setFarmForm({ ...farmForm, name: value })} />
                 <Input label="Location" value={farmForm.location} onChange={(value) => setFarmForm({ ...farmForm, location: value })} />
                 <Input label="Land size" type="number" value={farmForm.landSize} onChange={(value) => setFarmForm({ ...farmForm, landSize: value })} />
+                <label className="field"><span>Farm logo</span><input type="file" accept="image/*" onChange={(event) => setFarmForm({ ...farmForm, logo: event.target.files?.[0] || null })} /></label>
                 <Input label="Admin name" required={false} value={farmForm.adminName} onChange={(value) => setFarmForm({ ...farmForm, adminName: value })} />
                 <Input label="Admin email" required={false} type="email" value={farmForm.adminEmail} onChange={(value) => setFarmForm({ ...farmForm, adminEmail: value })} />
                 <Input label="Admin password" required={false} type="password" value={farmForm.adminPassword} onChange={(value) => setFarmForm({ ...farmForm, adminPassword: value })} />
@@ -803,6 +1038,7 @@ function App() {
             <Panel title="Farm controls">
               {farms.map((farm) => (
                 <article className="payroll-card" key={farm.id}>
+                  {farm.logo_url && <img alt={`${farm.name} logo`} className="farm-list-logo" src={farm.logo_url} />}
                   <div className="payroll-head">
                     <div>
                       <h4>{farm.name}</h4>
@@ -1057,6 +1293,36 @@ function App() {
                   value={logForm.task}
                   onChange={(value) => setLogForm({ ...logForm, task: value })}
                 />
+                {parsedQrPayload ? (
+                  <div className="highlighted-form stack">
+                    <SelectField
+                      label="Record type"
+                      value={logForm.recordType}
+                      onChange={(value) => setLogForm({
+                        ...logForm,
+                        recordType: value,
+                        materialType: ""
+                      })}
+                      options={parsedQrPayload.targetType === "crop" ? ["input", "harvest"] : ["input"]}
+                    />
+                    <SelectField
+                      label={logForm.recordType === "harvest" ? "Harvest type" : "Input type"}
+                      value={logForm.materialType}
+                      onChange={(value) => setLogForm({ ...logForm, materialType: value })}
+                      options={logMaterialOptions}
+                    />
+                    <div className="form-split">
+                      <Input label="Quantity" type="number" value={logForm.quantity} onChange={(value) => setLogForm({ ...logForm, quantity: value })} />
+                      <Input label="Unit" value={logForm.unit} onChange={(value) => setLogForm({ ...logForm, unit: value })} />
+                    </div>
+                    <TextArea
+                      label="Care or treatment notes"
+                      required={false}
+                      value={logForm.recordNotes}
+                      onChange={(value) => setLogForm({ ...logForm, recordNotes: value })}
+                    />
+                  </div>
+                ) : null}
                 <label className="field">
                   <span>Images (up to 4)</span>
                   <input
@@ -1079,6 +1345,15 @@ function App() {
                         <span>{formatDateTime(log.created_at)}</span>
                       </div>
                       <p>{log.task}</p>
+                      {log.activity_records?.length ? (
+                        <div className="activity-strip">
+                          {log.activity_records.map((record) => (
+                            <span className="status-chip" key={record.id || `${record.materialType}-${record.unit}`}>
+                              {record.materialType}: {record.quantity} {record.unit}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       {log.images?.length ? (
                         <div className="image-strip">
                           {log.images.map((image) => (
@@ -1092,6 +1367,44 @@ function App() {
               ) : (
                 <p className="muted">No daily logs submitted yet.</p>
               )}
+            </Panel>
+          </section>
+        )}
+
+        {view === "contribution" && (
+          <section className="page-grid two-column">
+            <Panel title="My contribution">
+              <div className="stack">
+                <label className="field">
+                  <span>Month</span>
+                  <input type="month" value={contributionMonth} onChange={(event) => setContributionMonth(event.target.value)} />
+                </label>
+                <div className="stats-grid report-stats">
+                  <StatCard label="Logs submitted" value={workerContribution?.overview?.logsSubmitted ?? 0} />
+                  <StatCard label="Completed duties" value={workerContribution?.overview?.completedAssignments ?? 0} />
+                  <StatCard label="Total duties" value={workerContribution?.overview?.totalAssignments ?? 0} />
+                </div>
+              </div>
+            </Panel>
+            <Panel title="What I recorded">
+              <List
+                emptyLabel="No care or harvest records this month."
+                items={(workerContribution?.activityBreakdown || []).map((item) => ({
+                  title: `${item.material_type} | ${item.target_label || "Farm target"}`,
+                  body: "Logged through QR check-in",
+                  meta: `${item.total_quantity} ${item.unit}`
+                }))}
+              />
+            </Panel>
+            <Panel className="wide-panel" title="Recent work summaries">
+              <List
+                emptyLabel="No daily logs this month."
+                items={(workerContribution?.recentLogs || []).map((item) => ({
+                  title: item.target_label || "General work",
+                  body: item.task,
+                  meta: formatDateTime(item.created_at)
+                }))}
+              />
             </Panel>
           </section>
         )}
@@ -1247,6 +1560,9 @@ function QrTargetList({ items, emptyLabel, onRegenerate, regeneratingDisabled = 
 function labelForView(view) {
   const labels = {
     overview: "Overview",
+    "logs-admin": "Worker Logs",
+    "monthly-report": "Monthly Report",
+    finance: "Finance",
     farms: "Farms",
     packages: "Packages",
     payroll: "Payroll",
@@ -1256,6 +1572,7 @@ function labelForView(view) {
     livestock: "Livestock",
     education: "Education",
     marketplace: "Marketplace",
+    contribution: "My Contribution",
     duties: "My Duties",
     schedule: "Schedule",
     learn: "Learning",
@@ -1273,6 +1590,30 @@ function formatDate(value) {
 function formatDateTime(value) {
   if (!value) return "Not set";
   return new Date(value).toLocaleString();
+}
+
+function currentMonthValue() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function todayValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getLogMaterialOptions(targetType, recordType) {
+  if (recordType === "harvest") {
+    return ["harvest"];
+  }
+
+  if (targetType === "livestock") {
+    return ["feed", "water", "medicine"];
+  }
+
+  if (targetType === "crop") {
+    return ["planting", "fertilizer", "water", "medicine"];
+  }
+
+  return ["general"];
 }
 
 function resolveDefaultView(user, pendingQrTarget) {
