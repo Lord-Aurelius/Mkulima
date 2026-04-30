@@ -1,4 +1,6 @@
 const { Pool } = require("pg");
+const fs = require("fs/promises");
+const path = require("path");
 const env = require("./env");
 
 const shouldUseSsl = /sslmode=require/i.test(env.databaseUrl) || /neon\.tech/i.test(env.databaseUrl);
@@ -35,7 +37,14 @@ async function withTransaction(work) {
   }
 }
 
+async function ensureSchema() {
+  const schemaPath = path.join(__dirname, "..", "db", "schema.sql");
+  const schemaSql = await fs.readFile(schemaPath, "utf8");
+  await pool.query(schemaSql);
+}
+
 module.exports = {
+  ensureSchema,
   pool,
   query,
   withTransaction
