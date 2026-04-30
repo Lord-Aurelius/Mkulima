@@ -30,9 +30,18 @@ CREATE TABLE IF NOT EXISTS packages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE farms
-  ADD CONSTRAINT farms_package_id_fkey
-  FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'farms_package_id_fkey'
+  ) THEN
+    ALTER TABLE farms
+      ADD CONSTRAINT farms_package_id_fkey
+      FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
