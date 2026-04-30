@@ -55,7 +55,8 @@ const updateCrop = asyncHandler(async (req, res) => {
     plantingDate,
     harvestDate,
     quantity: cleanNumber(quantity),
-    expectedYield: cleanNumber(expectedYield)
+    expectedYield: cleanNumber(expectedYield),
+    file: req.file || null
   });
 
   res.json({ crop });

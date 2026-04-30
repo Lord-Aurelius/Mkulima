@@ -51,14 +51,20 @@ const updateLivestock = asyncHandler(async (req, res) => {
     type: cleanString(type, 160),
     count: cleanNumber(count),
     productionMetric: cleanString(productionMetric, 80),
-    latestMetricValue: cleanNumber(latestMetricValue)
+    latestMetricValue: cleanNumber(latestMetricValue),
+    file: req.file || null
   });
 
   res.json({ livestock });
 });
 
+const deleteLivestock = asyncHandler(async (req, res) => {
+  const result = await service.deleteLivestock(req.auth, req.params.id, req.query.farmId);
+  res.json(result);
+});
+
 const addProductionUpdate = asyncHandler(async (req, res) => {
-  const { metricValue, notes } = req.body;
+  const { metricValue, metricUnit, notes } = req.body;
   const errors = collect(isPositiveNumber(metricValue, "Metric value"));
   if (errors.length) {
     return res.status(422).json({ error: { message: "Validation failed.", details: errors } });
@@ -66,6 +72,7 @@ const addProductionUpdate = asyncHandler(async (req, res) => {
 
   const update = await service.addProductionUpdate(req.auth, req.params.id, {
     metricValue: cleanNumber(metricValue),
+    metricUnit: cleanString(metricUnit || "", 80),
     notes: cleanMultiline(notes || "", 1000)
   });
 
@@ -85,6 +92,7 @@ const regenerateLivestockQr = asyncHandler(async (req, res) => {
 module.exports = {
   addProductionUpdate,
   createLivestock,
+  deleteLivestock,
   listLivestock,
   listProductionUpdates,
   regenerateLivestockQr,

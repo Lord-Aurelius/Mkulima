@@ -57,17 +57,32 @@ async function createLivestock(auth, payload) {
 
 async function updateLivestock(auth, livestockId, payload) {
   const farmId = resolveFarm(auth, payload.farmId || auth.farmId);
+  let image = null;
+  if (payload.file) {
+    image = await uploadImage({ file: payload.file, folder: `livestock/${farmId}` });
+  }
   const result = await query(
     `
       UPDATE livestock
       SET type = $2,
           count = $3,
           production_metric = $4,
-          latest_metric_value = $5
+          latest_metric_value = $5,
+          image_url = COALESCE($7, image_url),
+          storage_key = COALESCE($8, storage_key)
       WHERE id = $1 AND farm_id = $6
       RETURNING *
     `,
-    [livestockId, payload.type, payload.count, payload.productionMetric, payload.latestMetricValue, farmId]
+    [
+      livestockId,
+      payload.type,
+      payload.count,
+      payload.productionMetric,
+      payload.latestMetricValue,
+      farmId,
+      image ? image.url : null,
+      image ? image.key : null
+    ]
   );
 
   if (!result.rowCount) {
@@ -75,6 +90,18 @@ async function updateLivestock(auth, livestockId, payload) {
   }
 
   return decorateLivestock(result.rows[0]);
+}
+
+async function deleteLivestock(auth, livestockId, farmId) {
+  const scopedFarmId = resolveFarm(auth, farmId || auth.farmId);
+  const result = await query(
+    "DELETE FROM livestock WHERE id = $1 AND farm_id = $2 RETURNING id",
+    [livestockId, scopedFarmId]
+  );
+  if (!result.rowCount) {
+    throw new AppError(404, "Livestock record not found.");
+  }
+  return { success: true };
 }
 
 async function addProductionUpdate(auth, livestockId, payload) {
@@ -105,10 +132,11 @@ async function addProductionUpdate(auth, livestockId, payload) {
     await client.query(
       `
         UPDATE livestock
-        SET latest_metric_value = $2
+        SET latest_metric_value = $2,
+            production_metric = COALESCE(NULLIF($3, ''), production_metric)
         WHERE id = $1
       `,
-      [livestockId, payload.metricValue]
+      [livestockId, payload.metricValue, payload.metricUnit || ""]
     );
 
     return updateResult.rows[0];
@@ -154,6 +182,7 @@ async function regenerateLivestockQr(auth, livestockId, farmId) {
 module.exports = {
   addProductionUpdate,
   createLivestock,
+  deleteLivestock,
   listLivestock,
   listProductionUpdates,
   regenerateLivestockQr,

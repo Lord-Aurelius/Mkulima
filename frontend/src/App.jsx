@@ -68,6 +68,15 @@ function getViews(user) {
 
 const paymentStatuses = ["pending", "paid"];
 const assignmentStatuses = ["assigned", "in_progress", "completed"];
+const defaultProductionUnits = ["eggs", "litres", "kg", "metres", "bags", "trays", "crates"];
+
+function emptyCropForm() {
+  return { type: "", plantingDate: "", harvestDate: "", quantity: "", expectedYield: "", image: null };
+}
+
+function emptyLivestockForm() {
+  return { type: "", count: "", productionMetric: "", latestMetricValue: "", image: null };
+}
 
 function App() {
   const [session, setSession] = useState(() => readStoredJson(sessionKey, null));
@@ -102,9 +111,13 @@ function App() {
   const [editingWorkerId, setEditingWorkerId] = useState("");
   const [workerEditForm, setWorkerEditForm] = useState({ name: "", duty: "", email: "", employmentStartDate: "", payRate: "", paymentStatus: "pending" });
   const [dutyAssignForm, setDutyAssignForm] = useState({ workerId: "", title: "", description: "", dueDate: "" });
-  const [cropForm, setCropForm] = useState({ type: "", plantingDate: "", harvestDate: "", quantity: "", expectedYield: "", image: null });
-  const [livestockForm, setLivestockForm] = useState({ type: "", count: "", productionMetric: "", latestMetricValue: "", image: null });
-  const [productionForm, setProductionForm] = useState({ livestockId: "", metricValue: "", notes: "" });
+  const [cropForm, setCropForm] = useState(() => emptyCropForm());
+  const [editingCropId, setEditingCropId] = useState("");
+  const [cropEditForm, setCropEditForm] = useState(() => emptyCropForm());
+  const [livestockForm, setLivestockForm] = useState(() => emptyLivestockForm());
+  const [editingLivestockId, setEditingLivestockId] = useState("");
+  const [livestockEditForm, setLivestockEditForm] = useState(() => emptyLivestockForm());
+  const [productionForm, setProductionForm] = useState({ livestockId: "", metricValue: "", metricUnit: "", notes: "" });
   const [logForm, setLogForm] = useState({
     targetPayload: "",
     task: "",
@@ -133,6 +146,9 @@ function App() {
   const qrAccessMode = Boolean(activeQrPayload);
   const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
   const logMaterialOptions = getLogMaterialOptions(parsedQrPayload?.targetType, logForm.recordType);
+  const logUnitOptions = getMetricUnitOptions(parsedQrPayload?.label || "", parsedQrPayload?.targetType);
+  const selectedProductionItem = livestock.find((item) => item.id === productionForm.livestockId);
+  const productionUnitOptions = getMetricUnitOptions(selectedProductionItem?.type || "", "livestock", selectedProductionItem?.production_metric);
 
   useEffect(() => {
     const qrFromLocation = readQrTargetFromLocation();
@@ -413,7 +429,7 @@ function App() {
         formData.set("adminPassword", farmForm.adminPassword);
       }
       if (farmForm.logo) {
-        formData.set("logo", farmForm.logo);
+        formData.set("logo", await compressImageFile(farmForm.logo));
       }
 
       await api.farms.create(session.token, formData);
@@ -540,11 +556,53 @@ function App() {
       formData.set("harvestDate", cropForm.harvestDate);
       formData.set("quantity", cropForm.quantity);
       formData.set("expectedYield", cropForm.expectedYield);
-      if (cropForm.image) formData.set("image", cropForm.image);
+      if (cropForm.image) formData.set("image", await compressImageFile(cropForm.image));
       await api.crops.create(session.token, formData);
-      setCropForm({ type: "", plantingDate: "", harvestDate: "", quantity: "", expectedYield: "", image: null });
+      setCropForm(emptyCropForm());
       await refreshView("crops");
       setNotice("Crop saved.");
+    });
+  }
+
+  function beginEditCrop(crop) {
+    setEditingCropId(crop.id);
+    setCropEditForm({
+      type: crop.type || "",
+      plantingDate: toInputDate(crop.planting_date),
+      harvestDate: toInputDate(crop.expected_harvest_date),
+      quantity: crop.quantity ?? "",
+      expectedYield: crop.expected_yield ?? "",
+      image: null
+    });
+  }
+
+  async function handleCropUpdate(event) {
+    event.preventDefault();
+    await runTask(async () => {
+      const formData = new FormData();
+      formData.set("type", cropEditForm.type);
+      formData.set("plantingDate", cropEditForm.plantingDate);
+      formData.set("harvestDate", cropEditForm.harvestDate);
+      formData.set("quantity", cropEditForm.quantity);
+      formData.set("expectedYield", cropEditForm.expectedYield);
+      if (cropEditForm.image) formData.set("image", await compressImageFile(cropEditForm.image));
+      await api.crops.update(session.token, editingCropId, formData);
+      setEditingCropId("");
+      setCropEditForm(emptyCropForm());
+      await refreshView("crops");
+      setNotice("Crop updated.");
+    });
+  }
+
+  async function handleCropDelete(cropId) {
+    await runTask(async () => {
+      await api.crops.delete(session.token, cropId);
+      if (editingCropId === cropId) {
+        setEditingCropId("");
+        setCropEditForm(emptyCropForm());
+      }
+      await refreshView("crops");
+      setNotice("Crop deleted.");
     });
   }
 
@@ -556,11 +614,51 @@ function App() {
       formData.set("count", livestockForm.count);
       formData.set("productionMetric", livestockForm.productionMetric);
       formData.set("latestMetricValue", livestockForm.latestMetricValue);
-      if (livestockForm.image) formData.set("image", livestockForm.image);
+      if (livestockForm.image) formData.set("image", await compressImageFile(livestockForm.image));
       await api.livestock.create(session.token, formData);
-      setLivestockForm({ type: "", count: "", productionMetric: "", latestMetricValue: "", image: null });
+      setLivestockForm(emptyLivestockForm());
       await refreshView("livestock");
       setNotice("Livestock saved.");
+    });
+  }
+
+  function beginEditLivestock(item) {
+    setEditingLivestockId(item.id);
+    setLivestockEditForm({
+      type: item.type || "",
+      count: item.count ?? "",
+      productionMetric: item.production_metric || "",
+      latestMetricValue: item.latest_metric_value ?? "",
+      image: null
+    });
+  }
+
+  async function handleLivestockUpdate(event) {
+    event.preventDefault();
+    await runTask(async () => {
+      const formData = new FormData();
+      formData.set("type", livestockEditForm.type);
+      formData.set("count", livestockEditForm.count);
+      formData.set("productionMetric", livestockEditForm.productionMetric);
+      formData.set("latestMetricValue", livestockEditForm.latestMetricValue);
+      if (livestockEditForm.image) formData.set("image", await compressImageFile(livestockEditForm.image));
+      await api.livestock.update(session.token, editingLivestockId, formData);
+      setEditingLivestockId("");
+      setLivestockEditForm(emptyLivestockForm());
+      await refreshView("livestock");
+      setNotice("Livestock updated.");
+    });
+  }
+
+  async function handleLivestockDelete(livestockId) {
+    await runTask(async () => {
+      await api.livestock.delete(session.token, livestockId);
+      if (editingLivestockId === livestockId) {
+        setEditingLivestockId("");
+        setLivestockEditForm(emptyLivestockForm());
+      }
+      await refreshView("livestock");
+      setNotice("Livestock deleted.");
     });
   }
 
@@ -586,7 +684,7 @@ function App() {
       const formData = new FormData();
       formData.set("title", educationForm.title);
       formData.set("body", educationForm.body);
-      if (educationForm.image) formData.set("image", educationForm.image);
+      if (educationForm.image) formData.set("image", await compressImageFile(educationForm.image));
       await api.education.create(session.token, formData);
       setEducationForm({ title: "", body: "", image: null });
       await refreshView("education");
@@ -603,7 +701,7 @@ function App() {
       formData.set("location", marketplaceForm.location);
       formData.set("price", marketplaceForm.price);
       formData.set("phoneNumber", marketplaceForm.phoneNumber);
-      if (marketplaceForm.image) formData.set("image", marketplaceForm.image);
+      if (marketplaceForm.image) formData.set("image", await compressImageFile(marketplaceForm.image));
       await api.marketplace.create(session.token, formData);
       setMarketplaceForm({ title: "", contactPerson: "", location: "", price: "", phoneNumber: "", image: null });
       await refreshView("marketplace");
@@ -625,7 +723,7 @@ function App() {
     event.preventDefault();
     await runTask(async () => {
       await api.livestock.addUpdate(session.token, productionForm.livestockId, productionForm);
-      setProductionForm({ livestockId: "", metricValue: "", notes: "" });
+      setProductionForm({ livestockId: "", metricValue: "", metricUnit: "", notes: "" });
       setNotice("Production updated.");
     });
   }
@@ -650,7 +748,8 @@ function App() {
           formData.set("recordNotes", logForm.recordNotes);
         }
       }
-      Array.from(logForm.images || []).slice(0, 4).forEach((file) => {
+      const compressedLogImages = await compressImageFiles(logForm.images || []);
+      compressedLogImages.forEach((file) => {
         formData.append("images", file);
       });
 
@@ -1185,9 +1284,25 @@ function App() {
               </form>
             </Panel>
             <Panel title="Crop targets">
+              {editingCropId && (
+                <form className="highlighted-form stack" onSubmit={handleCropUpdate}>
+                  <Input label="Type" value={cropEditForm.type} onChange={(value) => setCropEditForm({ ...cropEditForm, type: value })} />
+                  <Input label="Planting date" type="date" value={cropEditForm.plantingDate} onChange={(value) => setCropEditForm({ ...cropEditForm, plantingDate: value })} />
+                  <Input label="Expected harvest" type="date" value={cropEditForm.harvestDate} onChange={(value) => setCropEditForm({ ...cropEditForm, harvestDate: value })} />
+                  <Input label="Quantity planted" type="number" value={cropEditForm.quantity} onChange={(value) => setCropEditForm({ ...cropEditForm, quantity: value })} />
+                  <Input label="Expected yield" type="number" value={cropEditForm.expectedYield} onChange={(value) => setCropEditForm({ ...cropEditForm, expectedYield: value })} />
+                  <label className="field"><span>Replace crop image</span><input type="file" accept="image/*" onChange={(event) => setCropEditForm({ ...cropEditForm, image: event.target.files?.[0] || null })} /></label>
+                  <div className="button-row">
+                    <button disabled={busy} type="submit">Save crop changes</button>
+                    <button className="ghost-button" onClick={() => setEditingCropId("")} type="button">Cancel</button>
+                  </div>
+                </form>
+              )}
               <QrTargetList
                 items={crops}
                 emptyLabel="No crops yet."
+                onEdit={beginEditCrop}
+                onDelete={handleCropDelete}
                 onRegenerate={user.role !== "worker" ? handleCropQrRegenerate : null}
                 regeneratingDisabled={busy}
               />
@@ -1201,16 +1316,31 @@ function App() {
               <form className="stack" onSubmit={handleLivestockCreate}>
                 <Input label="Type" value={livestockForm.type} onChange={(value) => setLivestockForm({ ...livestockForm, type: value })} />
                 <Input label="Count" type="number" value={livestockForm.count} onChange={(value) => setLivestockForm({ ...livestockForm, count: value })} />
-                <Input label="Production metric" value={livestockForm.productionMetric} onChange={(value) => setLivestockForm({ ...livestockForm, productionMetric: value })} />
+                <SelectField label="Production metric" value={livestockForm.productionMetric} onChange={(value) => setLivestockForm({ ...livestockForm, productionMetric: value })} options={getMetricUnitOptions(livestockForm.type, "livestock", livestockForm.productionMetric)} />
                 <Input label="Latest metric value" type="number" value={livestockForm.latestMetricValue} onChange={(value) => setLivestockForm({ ...livestockForm, latestMetricValue: value })} />
                 <label className="field"><span>Animal image</span><input type="file" accept="image/*" onChange={(event) => setLivestockForm({ ...livestockForm, image: event.target.files?.[0] || null })} /></label>
                 <button disabled={busy} type="submit">Save livestock</button>
               </form>
             </Panel>
             <Panel title="Livestock targets">
+              {editingLivestockId && (
+                <form className="highlighted-form stack" onSubmit={handleLivestockUpdate}>
+                  <Input label="Type" value={livestockEditForm.type} onChange={(value) => setLivestockEditForm({ ...livestockEditForm, type: value })} />
+                  <Input label="Count" type="number" value={livestockEditForm.count} onChange={(value) => setLivestockEditForm({ ...livestockEditForm, count: value })} />
+                  <SelectField label="Production metric" value={livestockEditForm.productionMetric} onChange={(value) => setLivestockEditForm({ ...livestockEditForm, productionMetric: value })} options={getMetricUnitOptions(livestockEditForm.type, "livestock", livestockEditForm.productionMetric)} />
+                  <Input label="Latest metric value" type="number" value={livestockEditForm.latestMetricValue} onChange={(value) => setLivestockEditForm({ ...livestockEditForm, latestMetricValue: value })} />
+                  <label className="field"><span>Replace animal image</span><input type="file" accept="image/*" onChange={(event) => setLivestockEditForm({ ...livestockEditForm, image: event.target.files?.[0] || null })} /></label>
+                  <div className="button-row">
+                    <button disabled={busy} type="submit">Save livestock changes</button>
+                    <button className="ghost-button" onClick={() => setEditingLivestockId("")} type="button">Cancel</button>
+                  </div>
+                </form>
+              )}
               <QrTargetList
                 items={livestock}
                 emptyLabel="No livestock yet."
+                onEdit={beginEditLivestock}
+                onDelete={handleLivestockDelete}
                 onRegenerate={user.role !== "worker" ? handleLivestockQrRegenerate : null}
                 regeneratingDisabled={busy}
               />
@@ -1313,7 +1443,7 @@ function App() {
                     />
                     <div className="form-split">
                       <Input label="Quantity" type="number" value={logForm.quantity} onChange={(value) => setLogForm({ ...logForm, quantity: value })} />
-                      <Input label="Unit" value={logForm.unit} onChange={(value) => setLogForm({ ...logForm, unit: value })} />
+                      <SelectField label="Unit" value={logForm.unit} onChange={(value) => setLogForm({ ...logForm, unit: value })} options={logUnitOptions} />
                     </div>
                     <TextArea
                       label="Care or treatment notes"
@@ -1431,12 +1561,24 @@ function App() {
               <form className="stack" onSubmit={handleProductionSubmit}>
                 <label className="field">
                   <span>Livestock record</span>
-                  <select value={productionForm.livestockId} onChange={(event) => setProductionForm({ ...productionForm, livestockId: event.target.value })} required>
+                  <select
+                    value={productionForm.livestockId}
+                    onChange={(event) => {
+                      const nextItem = livestock.find((item) => item.id === event.target.value);
+                      setProductionForm({
+                        ...productionForm,
+                        livestockId: event.target.value,
+                        metricUnit: nextItem?.production_metric || getMetricUnitOptions(nextItem?.type || "", "livestock")[0] || ""
+                      });
+                    }}
+                    required
+                  >
                     <option value="">Select livestock</option>
                     {livestock.map((item) => <option key={item.id} value={item.id}>{item.type}</option>)}
                   </select>
                 </label>
                 <Input label="Metric value" type="number" value={productionForm.metricValue} onChange={(value) => setProductionForm({ ...productionForm, metricValue: value })} />
+                <SelectField label="Metric unit" value={productionForm.metricUnit || selectedProductionItem?.production_metric || ""} onChange={(value) => setProductionForm({ ...productionForm, metricUnit: value })} options={productionUnitOptions} />
                 <TextArea label="Notes" required={false} value={productionForm.notes} onChange={(value) => setProductionForm({ ...productionForm, notes: value })} />
                 <button disabled={busy} type="submit">Submit update</button>
               </form>
@@ -1493,6 +1635,7 @@ function SelectField({ label, value, onChange, options }) {
     <label className="field">
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} required>
+        {!value && <option value="">Select {label.toLowerCase()}</option>}
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
     </label>
@@ -1532,7 +1675,7 @@ function EducationList({ posts }) {
   );
 }
 
-function QrTargetList({ items, emptyLabel, onRegenerate, regeneratingDisabled = false }) {
+function QrTargetList({ items, emptyLabel, onEdit, onDelete, onRegenerate, regeneratingDisabled = false }) {
   if (!items.length) return <p className="muted">{emptyLabel}</p>;
   return (
     <div className="qr-grid">
@@ -1542,14 +1685,22 @@ function QrTargetList({ items, emptyLabel, onRegenerate, regeneratingDisabled = 
           {item.image_url && <img alt={item.type} className="entity-image" src={item.image_url} />}
           <img alt={`${item.type} QR code`} src={item.qrCodeDataUrl} />
           {onRegenerate ? (
-            <button
-              className="ghost-button qr-action"
-              disabled={regeneratingDisabled}
-              onClick={() => onRegenerate(item.id)}
-              type="button"
-            >
-              Regenerate QR
-            </button>
+            <div className="button-row qr-actions">
+              {onEdit ? (
+                <button className="ghost-button" onClick={() => onEdit(item)} type="button">Edit</button>
+              ) : null}
+              {onDelete ? (
+                <button className="ghost-button danger-button" onClick={() => onDelete(item.id)} type="button">Delete</button>
+              ) : null}
+              <button
+                className="ghost-button"
+                disabled={regeneratingDisabled}
+                onClick={() => onRegenerate(item.id)}
+                type="button"
+              >
+                Regenerate QR
+              </button>
+            </div>
           ) : null}
         </article>
       ))}
@@ -1600,6 +1751,11 @@ function todayValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function toInputDate(value) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
 function getLogMaterialOptions(targetType, recordType) {
   if (recordType === "harvest") {
     return ["harvest"];
@@ -1614,6 +1770,89 @@ function getLogMaterialOptions(targetType, recordType) {
   }
 
   return ["general"];
+}
+
+function getMetricUnitOptions(label = "", targetType = "", existingUnit = "") {
+  const normalized = `${label} ${targetType}`.toLowerCase();
+  let preferred = [];
+
+  if (normalized.includes("egg") || normalized.includes("chicken") || normalized.includes("hen") || normalized.includes("poultry")) {
+    preferred = ["eggs", "trays", "crates"];
+  } else if (normalized.includes("cow") || normalized.includes("milk") || normalized.includes("dairy")) {
+    preferred = ["litres", "kg"];
+  } else if (normalized.includes("goat")) {
+    preferred = ["litres", "kg", "metres"];
+  } else if (normalized.includes("maize") || normalized.includes("corn")) {
+    preferred = ["kg", "bags"];
+  } else if (targetType === "crop") {
+    preferred = ["kg", "bags", "crates", "litres"];
+  } else {
+    preferred = defaultProductionUnits;
+  }
+
+  return Array.from(new Set([existingUnit, ...preferred, ...defaultProductionUnits].filter(Boolean)));
+}
+
+async function compressImageFiles(files, limit = 4) {
+  const selectedFiles = Array.from(files || []).slice(0, limit);
+  return Promise.all(selectedFiles.map((file) => compressImageFile(file)));
+}
+
+async function compressImageFile(file) {
+  if (!file || !file.type?.startsWith("image/") || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  if (file.size <= 700 * 1024) {
+    return file;
+  }
+
+  const bitmap = await loadImageBitmap(file);
+  const maxSide = 1400;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.drawImage(bitmap, 0, 0, width, height);
+  const blob = await canvasToBlob(canvas, "image/webp", 0.72);
+  if (bitmap.close) {
+    bitmap.close();
+  }
+
+  if (!blob || blob.size >= file.size) {
+    return file;
+  }
+
+  const filename = file.name.replace(/\.[^.]+$/, "") || "upload";
+  return new File([blob], `${filename}.webp`, { type: "image/webp" });
+}
+
+async function loadImageBitmap(file) {
+  if ("createImageBitmap" in window) {
+    return window.createImageBitmap(file);
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = url;
+    });
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob(resolve, type, quality);
+  });
 }
 
 function resolveDefaultView(user, pendingQrTarget) {

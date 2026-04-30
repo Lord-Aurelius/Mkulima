@@ -59,6 +59,10 @@ async function createCrop(auth, payload) {
 
 async function updateCrop(auth, cropId, payload) {
   const farmId = resolveFarm(auth, payload.farmId || auth.farmId);
+  let image = null;
+  if (payload.file) {
+    image = await uploadImage({ file: payload.file, folder: `crops/${farmId}` });
+  }
   const result = await query(
     `
       UPDATE crops
@@ -66,11 +70,23 @@ async function updateCrop(auth, cropId, payload) {
           planting_date = $3,
           expected_harvest_date = $4,
           quantity = $5,
-          expected_yield = $6
+          expected_yield = $6,
+          image_url = COALESCE($8, image_url),
+          storage_key = COALESCE($9, storage_key)
       WHERE id = $1 AND farm_id = $7
       RETURNING *
     `,
-    [cropId, payload.type, payload.plantingDate, payload.harvestDate, payload.quantity, payload.expectedYield, farmId]
+    [
+      cropId,
+      payload.type,
+      payload.plantingDate,
+      payload.harvestDate,
+      payload.quantity,
+      payload.expectedYield,
+      farmId,
+      image ? image.url : null,
+      image ? image.key : null
+    ]
   );
 
   if (!result.rowCount) {

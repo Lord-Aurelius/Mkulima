@@ -4,7 +4,7 @@ const env = require("../config/env");
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: env.maxImageSizeMb * 1024 * 1024,
+    fileSize: Math.max(env.maxImageSizeMb, 12) * 1024 * 1024,
     files: 4
   },
   fileFilter: (_req, file, callback) => {

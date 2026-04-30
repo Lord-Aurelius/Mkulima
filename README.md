@@ -87,7 +87,7 @@ S3_ENDPOINT=https://your-s3-endpoint.com
 S3_ACCESS_KEY=replace-me
 S3_SECRET_KEY=replace-me
 S3_PUBLIC_BASE_URL=https://your-public-cdn-or-bucket-url.com
-MAX_IMAGE_SIZE_MB=4
+MAX_IMAGE_SIZE_MB=12
 ```
 
 Notes:

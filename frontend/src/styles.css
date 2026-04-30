@@ -306,6 +306,10 @@ textarea {
   color: var(--text);
 }
 
+.danger-button {
+  color: var(--danger);
+}
+
 .main-panel {
   display: grid;
   gap: 0.85rem;
@@ -574,9 +578,14 @@ textarea {
   padding: 0.5rem;
 }
 
-.qr-action {
+.qr-action,
+.qr-actions {
   width: 100%;
   margin-top: 0.25rem;
+}
+
+.qr-actions button {
+  flex: 1 1 120px;
 }
 
 .entity-image {
