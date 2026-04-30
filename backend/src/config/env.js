@@ -23,6 +23,9 @@ const configuredAppOrigins = (process.env.APP_ORIGIN || "")
   .map((value) => value.trim())
   .filter(Boolean);
 
+const defaultLocalAppUrl = "http://127.0.0.1:4173";
+const configuredPrimaryAppOrigin = configuredAppOrigins[0] || "";
+
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 4000),
@@ -37,6 +40,13 @@ const env = {
     envModeUsesLocalOrigins(process.env.NODE_ENV || "development")
       ? "http://127.0.0.1:4000"
       : ""
+  ),
+  publicAppUrl: process.env.PUBLIC_APP_URL || (
+    configuredPrimaryAppOrigin || (
+      envModeUsesLocalOrigins(process.env.NODE_ENV || "development")
+        ? defaultLocalAppUrl
+        : ""
+    )
   ),
   jwtSecret: requireEnv("JWT_SECRET", "change-this-secret"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "8h",

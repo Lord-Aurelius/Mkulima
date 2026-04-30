@@ -77,6 +77,7 @@ NODE_ENV=production
 PORT=4000
 APP_ORIGIN=https://your-frontend-domain.com
 PUBLIC_ASSET_BASE_URL=https://your-backend-domain.com
+PUBLIC_APP_URL=https://your-frontend-domain.com
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=8h
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
@@ -93,6 +94,7 @@ Notes:
 
 - `APP_ORIGIN` supports comma-separated frontend domains.
 - `PUBLIC_ASSET_BASE_URL` should be the live backend URL.
+- `PUBLIC_APP_URL` should be the live frontend URL used by QR codes.
 - In production, image uploads expect real S3-compatible storage values.
 - Do not reuse the local development `.env`.
 

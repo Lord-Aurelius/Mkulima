@@ -1,6 +1,6 @@
 const { query, withTransaction } = require("../../config/db");
 const AppError = require("../../lib/app-error");
-const { createQrCodeDataUrl } = require("../../services/qr.service");
+const { createQrCodeDataUrl, createQrDestinationUrl } = require("../../services/qr.service");
 const { uploadImage } = require("../../services/storage.service");
 
 function resolveFarm(auth, farmId) {
@@ -19,6 +19,7 @@ async function decorateLivestock(record) {
   return {
     ...record,
     qrPayload,
+    qrUrl: createQrDestinationUrl(qrPayload),
     qrCodeDataUrl: await createQrCodeDataUrl(qrPayload)
   };
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 
 const sessionKey = "mkulima-session";
+const pendingQrKey = "mkulima-pending-qr";
 
 function readStoredJson(key, fallback) {
   if (typeof window === "undefined") {
@@ -13,6 +14,18 @@ function readStoredJson(key, fallback) {
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     window.localStorage.removeItem(key);
+    return fallback;
+  }
+}
+
+function readStoredText(key, fallback = "") {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    return window.localStorage.getItem(key) || fallback;
+  } catch {
     return fallback;
   }
 }
@@ -54,6 +67,7 @@ const assignmentStatuses = ["assigned", "in_progress", "completed"];
 
 function App() {
   const [session, setSession] = useState(() => readStoredJson(sessionKey, null));
+  const [pendingQrTarget, setPendingQrTarget] = useState(() => readStoredText(pendingQrKey, ""));
   const [user, setUser] = useState(null);
   const [view, setView] = useState("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -94,6 +108,20 @@ function App() {
   ];
 
   const views = useMemo(() => getViews(user), [user]);
+  const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
+
+  useEffect(() => {
+    const qrFromLocation = readQrTargetFromLocation();
+    if (!qrFromLocation) {
+      return;
+    }
+
+    persistPendingQr(qrFromLocation);
+    setPendingQrTarget(qrFromLocation);
+    setAuthMode("login");
+    setNotice("QR target loaded. Log in with a worker account to submit the daily log.");
+    clearQrQueryFromLocation();
+  }, []);
 
   useEffect(() => {
     if (!session?.token) {
@@ -104,10 +132,33 @@ function App() {
     api.me(session.token)
       .then((data) => {
         setUser(data.user);
-        setView(getViews(data.user)[0] || "overview");
+        setView(resolveDefaultView(data.user, pendingQrTarget));
       })
       .catch(() => clearSession());
   }, [session?.token]);
+
+  useEffect(() => {
+    if (user?.role !== "worker" || !pendingQrTarget) {
+      return;
+    }
+
+    const payload = parseQrPayloadInput(pendingQrTarget);
+    if (!payload) {
+      clearPendingQr();
+      setPendingQrTarget("");
+      return;
+    }
+
+    setLogForm((current) => ({
+      ...current,
+      targetPayload: JSON.stringify(payload)
+    }));
+    setView("daily-log");
+    setNotice(`QR target ready for ${payload.label || payload.targetType}. Add the work details and submit.`);
+    clearPendingQr();
+    setPendingQrTarget("");
+    clearQrQueryFromLocation();
+  }, [user, pendingQrTarget]);
 
   useEffect(() => {
     if (!session?.token || !user) {
@@ -466,7 +517,7 @@ function App() {
     await runTask(async () => {
       const parsedTargetPayload = parseQrPayloadInput(logForm.targetPayload);
       if (logForm.targetPayload.trim() && !parsedTargetPayload) {
-        throw new Error("The scanned QR payload is not valid. Paste the full QR content from a crop or livestock code.");
+        throw new Error("The scanned QR code is not valid. Paste the full crop or livestock QR link or payload.");
       }
 
       const formData = new FormData();
@@ -486,7 +537,6 @@ function App() {
   }
 
   const editingWorker = workers.find((worker) => worker.id === editingWorkerId);
-  const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
 
   if (!session?.token || !user) {
     return (
@@ -884,7 +934,7 @@ function App() {
                         <span>{parsedQrPayload.label || parsedQrPayload.targetId || "QR target ready"}</span>
                       </>
                     ) : (
-                      <span className="error">Paste the full QR content after scanning.</span>
+                      <span className="error">Paste the full QR link or payload after scanning.</span>
                     )}
                   </div>
                 )}
@@ -1101,7 +1151,115 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString();
 }
 
+function resolveDefaultView(user, pendingQrTarget) {
+  if (user?.role === "worker" && parseQrPayloadInput(pendingQrTarget)) {
+    return "daily-log";
+  }
+
+  return getViews(user)[0] || "overview";
+}
+
+function readQrTargetFromLocation() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const currentUrl = new URL(window.location.href);
+  const qrValue = currentUrl.searchParams.get("qr");
+  if (!qrValue) {
+    return "";
+  }
+
+  return decodeQrParam(qrValue) || qrValue;
+}
+
+function clearQrQueryFromLocation() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const currentUrl = new URL(window.location.href);
+  if (!currentUrl.searchParams.has("qr")) {
+    return;
+  }
+
+  currentUrl.searchParams.delete("qr");
+  const nextPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+  window.history.replaceState({}, "", nextPath || "/");
+}
+
+function persistPendingQr(value) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(pendingQrKey, value);
+}
+
+function clearPendingQr() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(pendingQrKey);
+}
+
 function parseQrPayloadInput(value) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const directPayload = tryParseQrPayloadObject(value);
+  if (directPayload) {
+    return directPayload;
+  }
+
+  const decodedParamPayload = tryParseQrPayloadObject(decodeQrParam(value));
+  if (decodedParamPayload) {
+    return decodedParamPayload;
+  }
+
+  try {
+    const url = new URL(value);
+    const qrValue = url.searchParams.get("qr");
+    if (!qrValue) {
+      return null;
+    }
+
+    return tryParseQrPayloadObject(decodeQrParam(qrValue)) || tryParseQrPayloadObject(qrValue);
+  } catch {
+    return null;
+  }
+}
+
+function decodeQrParam(value) {
+  if (!value) {
+    return "";
+  }
+
+  const normalized = value.trim();
+  const variants = [normalized];
+  try {
+    variants.push(decodeURIComponent(normalized));
+  } catch {
+    // Ignore malformed URI sequences and keep the raw value.
+  }
+
+  for (const variant of variants) {
+    try {
+      const padded = variant.replace(/-/g, "+").replace(/_/g, "/");
+      const remainder = padded.length % 4;
+      const base64 = remainder ? `${padded}${"=".repeat(4 - remainder)}` : padded;
+      return window.atob(base64);
+    } catch {
+      // Keep trying fallbacks.
+    }
+  }
+
+  return variants[variants.length - 1];
+}
+
+function tryParseQrPayloadObject(value) {
   if (!value?.trim()) {
     return null;
   }
