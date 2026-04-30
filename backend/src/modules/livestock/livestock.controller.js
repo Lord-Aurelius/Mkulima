@@ -77,10 +77,16 @@ const listProductionUpdates = asyncHandler(async (req, res) => {
   res.json({ updates });
 });
 
+const regenerateLivestockQr = asyncHandler(async (req, res) => {
+  const livestock = await service.regenerateLivestockQr(req.auth, req.params.id, req.body?.farmId || req.query.farmId);
+  res.json({ livestock });
+});
+
 module.exports = {
   addProductionUpdate,
   createLivestock,
   listLivestock,
   listProductionUpdates,
+  regenerateLivestockQr,
   updateLivestock
 };

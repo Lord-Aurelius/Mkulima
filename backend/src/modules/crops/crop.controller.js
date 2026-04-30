@@ -66,9 +66,15 @@ const deleteCrop = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+const regenerateCropQr = asyncHandler(async (req, res) => {
+  const crop = await service.regenerateCropQr(req.auth, req.params.id, req.body?.farmId || req.query.farmId);
+  res.json({ crop });
+});
+
 module.exports = {
   createCrop,
   deleteCrop,
   listCrops,
+  regenerateCropQr,
   updateCrop
 };

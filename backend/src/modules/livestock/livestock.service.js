@@ -132,10 +132,30 @@ async function listProductionUpdates(auth, livestockId) {
   return result.rows;
 }
 
+async function regenerateLivestockQr(auth, livestockId, farmId) {
+  const scopedFarmId = resolveFarm(auth, farmId || auth.farmId);
+  const result = await query(
+    `
+      UPDATE livestock
+      SET qr_token = gen_random_uuid()
+      WHERE id = $1 AND farm_id = $2
+      RETURNING *
+    `,
+    [livestockId, scopedFarmId]
+  );
+
+  if (!result.rowCount) {
+    throw new AppError(404, "Livestock record not found.");
+  }
+
+  return decorateLivestock(result.rows[0]);
+}
+
 module.exports = {
   addProductionUpdate,
   createLivestock,
   listLivestock,
   listProductionUpdates,
+  regenerateLivestockQr,
   updateLivestock
 };

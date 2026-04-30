@@ -472,6 +472,22 @@ function App() {
     });
   }
 
+  async function handleCropQrRegenerate(cropId) {
+    await runTask(async () => {
+      await api.crops.regenerateQr(session.token, cropId);
+      await refreshView("crops");
+      setNotice("Crop QR code regenerated. Old copies will no longer work.");
+    });
+  }
+
+  async function handleLivestockQrRegenerate(livestockId) {
+    await runTask(async () => {
+      await api.livestock.regenerateQr(session.token, livestockId);
+      await refreshView("livestock");
+      setNotice("Livestock QR code regenerated. Old copies will no longer work.");
+    });
+  }
+
   async function handleEducationCreate(event) {
     event.preventDefault();
     await runTask(async () => {
@@ -845,7 +861,12 @@ function App() {
               </form>
             </Panel>
             <Panel title="Crop targets">
-              <QrTargetList items={crops} emptyLabel="No crops yet." />
+              <QrTargetList
+                items={crops}
+                emptyLabel="No crops yet."
+                onRegenerate={user.role !== "worker" ? handleCropQrRegenerate : null}
+                regeneratingDisabled={busy}
+              />
             </Panel>
           </section>
         )}
@@ -863,7 +884,12 @@ function App() {
               </form>
             </Panel>
             <Panel title="Livestock targets">
-              <QrTargetList items={livestock} emptyLabel="No livestock yet." />
+              <QrTargetList
+                items={livestock}
+                emptyLabel="No livestock yet."
+                onRegenerate={user.role !== "worker" ? handleLivestockQrRegenerate : null}
+                regeneratingDisabled={busy}
+              />
             </Panel>
           </section>
         )}
@@ -1105,7 +1131,7 @@ function EducationList({ posts }) {
   );
 }
 
-function QrTargetList({ items, emptyLabel }) {
+function QrTargetList({ items, emptyLabel, onRegenerate, regeneratingDisabled = false }) {
   if (!items.length) return <p className="muted">{emptyLabel}</p>;
   return (
     <div className="qr-grid">
@@ -1114,6 +1140,16 @@ function QrTargetList({ items, emptyLabel }) {
           <div className="log-head"><strong>{item.type}</strong><span>{item.count ? `${item.count} units` : `${item.quantity} planted`}</span></div>
           {item.image_url && <img alt={item.type} className="entity-image" src={item.image_url} />}
           <img alt={`${item.type} QR code`} src={item.qrCodeDataUrl} />
+          {onRegenerate ? (
+            <button
+              className="ghost-button qr-action"
+              disabled={regeneratingDisabled}
+              onClick={() => onRegenerate(item.id)}
+              type="button"
+            >
+              Regenerate QR
+            </button>
+          ) : null}
         </article>
       ))}
     </div>

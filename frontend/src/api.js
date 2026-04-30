@@ -82,11 +82,13 @@ export const api = {
   },
   crops: {
     list: (token, farmId) => request(`/crops${farmId ? `?farmId=${farmId}` : ""}`, { token }),
-    create: (token, formData) => request("/crops", { token, method: "POST", formData })
+    create: (token, formData) => request("/crops", { token, method: "POST", formData }),
+    regenerateQr: (token, id) => request(`/crops/${id}/regenerate-qr`, { token, method: "POST" })
   },
   livestock: {
     list: (token, farmId) => request(`/livestock${farmId ? `?farmId=${farmId}` : ""}`, { token }),
     create: (token, formData) => request("/livestock", { token, method: "POST", formData }),
+    regenerateQr: (token, id) => request(`/livestock/${id}/regenerate-qr`, { token, method: "POST" }),
     addUpdate: (token, id, body) => request(`/livestock/${id}/updates`, { token, method: "POST", body })
   },
   education: {

@@ -89,9 +89,29 @@ async function deleteCrop(auth, cropId, farmId) {
   return { success: true };
 }
 
+async function regenerateCropQr(auth, cropId, farmId) {
+  const scopedFarmId = resolveFarm(auth, farmId || auth.farmId);
+  const result = await query(
+    `
+      UPDATE crops
+      SET qr_token = gen_random_uuid()
+      WHERE id = $1 AND farm_id = $2
+      RETURNING *
+    `,
+    [cropId, scopedFarmId]
+  );
+
+  if (!result.rowCount) {
+    throw new AppError(404, "Crop not found.");
+  }
+
+  return decorateCrop(result.rows[0]);
+}
+
 module.exports = {
   createCrop,
   deleteCrop,
   listCrops,
+  regenerateCropQr,
   updateCrop
 };
