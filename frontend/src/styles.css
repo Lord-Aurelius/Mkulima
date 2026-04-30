@@ -125,6 +125,19 @@ textarea {
   align-self: center;
 }
 
+.qr-access-shell .landing-visual {
+  min-height: 520px;
+}
+
+.qr-access-intro {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.qr-access-intro h2 {
+  margin: 0;
+}
+
 .auth-shell {
   display: grid;
   place-items: center;

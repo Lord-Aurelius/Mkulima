@@ -8,6 +8,6 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get("/", requireRoles("creator", "admin", "worker"), controller.listLogs);
-router.post("/", requireRoles("creator", "admin", "worker"), upload.array("images", 4), controller.createLog);
+router.post("/", requireRoles("worker"), upload.array("images", 4), controller.createLog);
 
 module.exports = router;

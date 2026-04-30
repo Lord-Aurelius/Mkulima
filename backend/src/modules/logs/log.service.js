@@ -3,34 +3,11 @@ const AppError = require("../../lib/app-error");
 const { uploadImage } = require("../../services/storage.service");
 
 async function resolveWorker(auth, workerId, client) {
-  if (auth.role === "worker") {
-    return { id: auth.sub, farm_id: auth.farmId };
+  if (auth.role !== "worker") {
+    throw new AppError(403, "Only workers can submit daily logs.");
   }
 
-  if (!workerId) {
-    throw new AppError(422, "Worker is required.");
-  }
-
-  const workerResult = await client.query(
-    `
-      SELECT id, farm_id, name
-      FROM users
-      WHERE id = $1 AND role = 'worker'
-      LIMIT 1
-    `,
-    [workerId]
-  );
-
-  if (!workerResult.rowCount) {
-    throw new AppError(404, "Worker not found.");
-  }
-
-  const worker = workerResult.rows[0];
-  if (auth.role !== "creator" && worker.farm_id !== auth.farmId) {
-    throw new AppError(403, "You can only log work for your farm.");
-  }
-
-  return worker;
+  return { id: auth.sub, farm_id: auth.farmId };
 }
 
 async function resolveTarget(auth, targetPayload, client) {

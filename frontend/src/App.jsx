@@ -108,6 +108,8 @@ function App() {
   ];
 
   const views = useMemo(() => getViews(user), [user]);
+  const activeQrPayload = parseQrPayloadInput(pendingQrTarget);
+  const qrAccessMode = Boolean(activeQrPayload);
   const parsedQrPayload = parseQrPayloadInput(logForm.targetPayload);
 
   useEffect(() => {
@@ -134,7 +136,7 @@ function App() {
         setUser(data.user);
         setView(resolveDefaultView(data.user, pendingQrTarget));
       })
-      .catch(() => clearSession());
+      .catch(() => clearSession(qrAccessMode));
   }, [session?.token]);
 
   useEffect(() => {
@@ -272,7 +274,7 @@ function App() {
     window.localStorage.setItem(sessionKey, JSON.stringify(nextSession));
   }
 
-  function clearSession() {
+  function clearSession(preserveQr = false) {
     setSession(null);
     setUser(null);
     setSummary(null);
@@ -288,6 +290,25 @@ function App() {
     setMarketplaceAds([]);
     setMobileMenuOpen(false);
     window.localStorage.removeItem(sessionKey);
+    if (!preserveQr) {
+      clearPendingQr();
+      setPendingQrTarget("");
+      clearQrQueryFromLocation();
+    }
+  }
+
+  function handleSwitchToWorker() {
+    clearSession(true);
+    setAuthMode("login");
+    setNotice("QR target kept. Sign in with a worker account to continue.");
+    setError("");
+  }
+
+  function handleDismissQrAccess() {
+    clearSession();
+    setAuthMode("login");
+    setNotice("");
+    setError("");
   }
 
   function handleViewChange(nextView) {
@@ -555,6 +576,39 @@ function App() {
   const editingWorker = workers.find((worker) => worker.id === editingWorkerId);
 
   if (!session?.token || !user) {
+    if (qrAccessMode) {
+      return (
+        <div className="landing-shell qr-access-shell">
+          <section className="landing-visual">
+            <img alt="Farm worker in the field" src={heroImages[1]} />
+            <img alt="Healthy farm produce" src={heroImages[0]} />
+            <div className="landing-copy">
+              <p className="eyebrow">Worker check-in</p>
+              <h1>Scan accepted. This QR is tied to a farm task record.</h1>
+              <p className="muted">Sign in with a worker account to record what was done for this crop or livestock target.</p>
+            </div>
+          </section>
+
+          <section className="auth-card landing-card">
+            <div className="qr-access-intro">
+              <p className="eyebrow">QR target</p>
+              <h2>{activeQrPayload?.label || "Farm task target"}</h2>
+              <p className="muted">{activeQrPayload?.targetType === "livestock" ? "Livestock work log" : "Crop work log"}</p>
+            </div>
+
+            <form className="stack" onSubmit={handleLogin}>
+              <Input label="Worker email" type="email" value={authForm.email} onChange={(value) => setAuthForm({ ...authForm, email: value })} />
+              <Input label="Password" type="password" value={authForm.password} onChange={(value) => setAuthForm({ ...authForm, password: value })} />
+              <button disabled={busy} type="submit">{busy ? "Please wait..." : "Continue to daily log"}</button>
+            </form>
+
+            {notice && <p className="success-text">{notice}</p>}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </div>
+      );
+    }
+
     return (
       <div className="landing-shell">
         <section className="landing-visual">
@@ -593,6 +647,40 @@ function App() {
 
           {notice && <p className="success-text">{notice}</p>}
           {error && <p className="error">{error}</p>}
+        </section>
+      </div>
+    );
+  }
+
+  if (qrAccessMode && user.role !== "worker") {
+    return (
+      <div className="landing-shell qr-access-shell">
+        <section className="landing-visual">
+          <img alt="Farm worker checking crops" src={heroImages[1]} />
+          <img alt="Farm produce" src={heroImages[0]} />
+          <div className="landing-copy">
+            <p className="eyebrow">Worker-only QR</p>
+            <h1>This QR opens a worker daily log, not the admin workspace.</h1>
+            <p className="muted">Use a worker account to submit work against the linked crop or livestock record.</p>
+          </div>
+        </section>
+
+        <section className="auth-card landing-card">
+          <div className="qr-access-intro">
+            <p className="eyebrow">Signed in as</p>
+            <h2>{user.name}</h2>
+            <p className="muted">{user.role} access cannot submit QR-based worker logs.</p>
+          </div>
+
+          <div className="qr-summary">
+            <strong>{activeQrPayload?.targetType === "livestock" ? "Livestock target" : "Crop target"}</strong>
+            <span>{activeQrPayload?.label || "Farm task target"}</span>
+          </div>
+
+          <div className="button-row">
+            <button onClick={handleSwitchToWorker} type="button">Sign in as worker</button>
+            <button className="ghost-button" onClick={handleDismissQrAccess} type="button">Dismiss QR flow</button>
+          </div>
         </section>
       </div>
     );
