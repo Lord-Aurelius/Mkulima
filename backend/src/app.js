@@ -5,6 +5,7 @@ const logger = require("./lib/logger");
 const errorHandler = require("./middleware/error-handler");
 const notFound = require("./middleware/not-found");
 const securityHeaders = require("./middleware/security-headers");
+const serveDatabaseAsset = require("./middleware/asset-server");
 const authRoutes = require("./modules/auth/auth.routes");
 const farmRoutes = require("./modules/farms/farm.routes");
 const workerRoutes = require("./modules/workers/worker.routes");
@@ -44,6 +45,8 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: "1mb" }));
+app.get("/assets/*", serveDatabaseAsset);
+app.get("/uploads/*", serveDatabaseAsset);
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads"), {
   immutable: true,
   maxAge: "7d"

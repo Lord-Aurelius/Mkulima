@@ -106,6 +106,13 @@ CREATE TABLE IF NOT EXISTS daily_log_images (
 
 CREATE INDEX IF NOT EXISTS daily_log_images_log_idx ON daily_log_images (log_id);
 
+CREATE TABLE IF NOT EXISTS uploaded_assets (
+  storage_key TEXT PRIMARY KEY,
+  content_type VARCHAR(120) NOT NULL,
+  image_data BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS farm_activity_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   log_id UUID REFERENCES daily_logs(id) ON DELETE SET NULL,

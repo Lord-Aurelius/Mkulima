@@ -3,6 +3,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const sharp = require("sharp");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const { query } = require("../config/db");
 const env = require("../config/env");
 const s3 = require("../config/s3");
 
@@ -15,6 +16,19 @@ function useLocalStorage() {
   );
 }
 
+function useDatabaseStorage() {
+  return (
+    env.s3.endpoint.includes("example.com") ||
+    env.s3.accessKeyId === "replace-me" ||
+    env.s3.secretAccessKey === "replace-me" ||
+    env.s3.publicBaseUrl.includes("example.com")
+  );
+}
+
+function publicAssetUrl(key) {
+  return `${env.publicAssetBaseUrl.replace(/\/$/, "")}/assets/${key}`;
+}
+
 async function uploadImage({ file, folder }) {
   const key = `${folder}/${Date.now()}-${crypto.randomUUID()}.webp`;
   const buffer = await sharp(file.buffer)
@@ -22,6 +36,24 @@ async function uploadImage({ file, folder }) {
     .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
     .webp({ quality: 78 })
     .toBuffer();
+
+  if (useDatabaseStorage()) {
+    await query(
+      `
+        INSERT INTO uploaded_assets (storage_key, content_type, image_data)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (storage_key)
+        DO UPDATE SET content_type = EXCLUDED.content_type, image_data = EXCLUDED.image_data
+      `,
+      [key, "image/webp", buffer]
+    );
+
+    return {
+      key,
+      url: publicAssetUrl(key),
+      filename: path.basename(key)
+    };
+  }
 
   if (useLocalStorage()) {
     const uploadRoot = path.join(__dirname, "..", "..", "uploads");
@@ -52,6 +84,21 @@ async function uploadImage({ file, folder }) {
   };
 }
 
+async function getStoredAsset(key) {
+  const result = await query(
+    `
+      SELECT storage_key, content_type, image_data
+      FROM uploaded_assets
+      WHERE storage_key = $1
+      LIMIT 1
+    `,
+    [key]
+  );
+
+  return result.rows[0] || null;
+}
+
 module.exports = {
+  getStoredAsset,
   uploadImage
 };
